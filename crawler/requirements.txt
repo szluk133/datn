@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+motor
+httpx
+beautifulsoup4
+python-dotenv
+apscheduler
+google-generativeai
+qdrant-client
+meilisearch-python-async
+sentence-transformers
+transformers
+torch
+numpy
+scikit-learn

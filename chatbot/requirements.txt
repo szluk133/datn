@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+pydantic
+python-dotenv
+google-generativeai
+qdrant-client
+motor
+langchain-text-splitters
+python-dateutil
