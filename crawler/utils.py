@@ -37,19 +37,17 @@ def split_text_into_chunks(article_id: str, content: str) -> List[Dict]:
     content_length = len(content)
     chunk_index = 0
     
-    # Logic cắt đơn giản theo ký tự (có thể nâng cấp cắt theo câu/đoạn sau)
     while chunk_index * CHUNK_SIZE_CHARS < content_length:
         offset = chunk_index * CHUNK_SIZE_CHARS
         chunk_text = content[offset: offset + CHUNK_SIZE_CHARS]
         
-        # Bỏ qua chunk quá ngắn (dưới 50 ký tự)
         if len(chunk_text.strip()) < 50:
             chunk_index += 1
             continue
 
         chunk_data = {
             'chunk_id': f"{article_id}_{chunk_index}",
-            'text': chunk_text, # Nội dung quan trọng cho Chatbot
+            'text': chunk_text,
             'offset': offset
         }
         chunks.append(chunk_data)

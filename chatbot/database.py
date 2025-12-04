@@ -32,6 +32,6 @@ async def close_mongo_connection():
 
 def get_mongo_db():
     if db_motor.db is None:
-        raise Exception("Chưa kết nối tới MongoDB. Hãy đảm bảo gọi 'connect_to_mongo' khi khởi động.")
+        raise Exception("Chưa kết nối tới MongoDB.")
     return db_motor.db
 

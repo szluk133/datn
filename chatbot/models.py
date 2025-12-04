@@ -2,9 +2,6 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
 
 class ChatHistory(BaseModel):
-    """
-    Mô hình cho một cặp hỏi-đáp trong lịch sử chat.
-    """
     query: str
     answer: str
 
@@ -24,12 +21,11 @@ class ChatRequest(BaseModel):
     query: str = Field(..., description="Câu hỏi của người dùng.")
     conversation_id: Optional[str] = Field(None, description="ID của phiên hội thoại hiện tại.")
     
-    # Thay thế các trường rời rạc bằng object context để dễ quản lý
     context: ChatContext = Field(default_factory=ChatContext, description="Ngữ cảnh trang web hiện tại.")
 
 class SourcedAnswer(BaseModel):
     """
-    Đại diện cho một nguồn thông tin (bài báo).
+    Đại diện cho một nguồn bài báo.
     """
     article_id: str = Field(..., description="ID của bài báo nguồn.")
     title: str = Field(..., description="Tiêu đề của bài báo nguồn.")

@@ -9,7 +9,6 @@ from config import (
 from qdrant_client import AsyncQdrantClient
 from meilisearch_python_async import Client as MeiliClient
 
-# Global Clients
 client: Optional[motor.motor_asyncio.AsyncIOMotorClient] = None
 db: Optional[motor.motor_asyncio.AsyncIOMotorDatabase] = None
 qdrant_client: Optional[AsyncQdrantClient] = None
@@ -43,7 +42,6 @@ async def close_connections():
     if qdrant_client: await qdrant_client.close()
     if meili_client: await meili_client.close()
 
-# Getters
 def get_db() -> motor.motor_asyncio.AsyncIOMotorDatabase:
     return db
 

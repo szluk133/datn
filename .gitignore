@@ -39,7 +39,16 @@ be/node_modules/
 crawler/__pycache__/
 crawler/logs/
 crawler/crawl/
+# crawler/config.py
+crawler/del_meli.py
+crawler/del_qdrant.py
+crawler/migrate_and_reset.py
+crawler/update_meilisearch_data.py
+crawler/update_qdrant_data.py
+crawler/update_search_id_array.py
 
 chatbot/__pycache__/
 chatbot/logs/
 chatbot/chat/
+chatbot/sync_service.py
+# chatbot/config.py

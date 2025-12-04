@@ -3,30 +3,21 @@ from qdrant_client import AsyncQdrantClient
 from qdrant_client.models import VectorParams, Distance, PointStruct
 from config import QDRANT_URL, QDRANT_API_KEY, QDRANT_COLLECTION
 
-# [UPDATED] Kích thước vector của model BGE-Small thường là 384.
-# Nếu model bạn dùng là Base (768), hãy sửa lại số này.
 VECTOR_SIZE = 384
 
 async def setup_qdrant_collection(recreate: bool = False):
-    """
-    Khởi tạo hoặc cập nhật Schema cho Qdrant Collection.
-    Args:
-        recreate (bool): Nếu True, sẽ XÓA collection cũ và tạo lại từ đầu (MẤT DỮ LIỆU).
-    """
+
     print(f"[SETUP] Đang kết nối tới Qdrant: {QDRANT_URL}...")
     
     try:
         client = AsyncQdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
         
-        # 1. Kiểm tra Collection tồn tại chưa
         collections = await client.get_collections()
         exists = any(c.name == QDRANT_COLLECTION for c in collections.collections)
         
         if exists:
             print(f"[INFO] Collection '{QDRANT_COLLECTION}' đã tồn tại.")
             
-            # Kiểm tra config cũ xem có khớp size không (nếu có thể)
-            # Nếu size khác nhau, bắt buộc phải recreate
             
             if recreate:
                 print(f"[WARN] Đang xóa collection '{QDRANT_COLLECTION}' để tạo lại...")
@@ -34,7 +25,6 @@ async def setup_qdrant_collection(recreate: bool = False):
             else:
                 print("[INFO] Giữ nguyên dữ liệu hiện có. LƯU Ý: Nếu kích thước vector thay đổi, bạn CẦN chạy lại với --reset.")
 
-        # 2. Tạo Collection mới (Nếu chưa có hoặc vừa xóa)
         if not exists or recreate:
             print(f"[SETUP] Đang tạo Collection '{QDRANT_COLLECTION}' với size={VECTOR_SIZE}...")
             await client.create_collection(
@@ -46,7 +36,6 @@ async def setup_qdrant_collection(recreate: bool = False):
             )
             print("[SUCCESS] Đã tạo Collection thành công.")
 
-        # 3. Tạo Payload Index
         print("[SETUP] Đang tối ưu hóa Index cho các trường Payload...")
         
         await client.create_payload_index(collection_name=QDRANT_COLLECTION, field_name="article_id", field_schema="keyword")

@@ -22,10 +22,8 @@ async def startup_event():
     global chat_service
     logger.info("Starting up...")
     try:
-        # 1. Kết nối MongoDB (để lưu lịch sử chat)
         await connect_to_mongo()
 
-        # 2. Khởi tạo Chat Service (để query Qdrant & gọi Gemini)
         chat_service = ChatService()
         
         logger.info("ChatService initialized successfully.")
@@ -58,5 +56,4 @@ def health_check():
 
 if __name__ == "__main__":
     uvicorn.run("main:app", host="0.0.0.0", port=5000, reload=True)
-    #uvicorn main:app --host 0.0.0.0 --port 5000 --reload
 

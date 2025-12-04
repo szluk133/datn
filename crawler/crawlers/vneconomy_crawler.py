@@ -44,13 +44,12 @@ class VneconomyCrawler(BaseCrawler):
 
     def extract_article_links(self, soup: BeautifulSoup, is_search_page: bool = True) -> List[Dict]:
         articles = []
-        seen_links = set() # Set này dùng để lọc trùng TRONG trang hiện tại
+        seen_links = set() 
         all_links = soup.select('a[href]')
         
         for link_tag in all_links:
             try:
                 href = link_tag.get('href')
-                # Lọc rác
                 if not href or '.htm' not in href or 'video' in href or len(href) < 15:
                     continue
                 
@@ -61,7 +60,6 @@ class VneconomyCrawler(BaseCrawler):
 
                 title = link_tag.get('title') or link_tag.text.strip()
                 
-                # Nếu thẻ a hiện tại không có title (ví dụ thẻ ảnh), thử tìm ở cha
                 if not title:
                     parent_container = link_tag.find_parent(class_=['featured-row_item', 'story-item', 'highlight-item', 'grid-new-column_item'])
                     if parent_container:
@@ -72,7 +70,6 @@ class VneconomyCrawler(BaseCrawler):
                 if not title or len(title) < 5: 
                     continue
 
-                # Tìm ngày đăng
                 pub_date = None
                 parent_classes = [
                     'featured-row_item', 'featured-column_item', 
@@ -111,10 +108,10 @@ class VneconomyCrawler(BaseCrawler):
             
             # 2. Content
             body = soup.select_one('div[data-field="body"]') or \
-                   soup.select_one('.detail-content') or \
-                   soup.select_one('.content-detail') or \
-                   soup.select_one('.multimedia-content') or \
-                   soup.select_one('article.post-content')
+                soup.select_one('.detail-content') or \
+                soup.select_one('.content-detail') or \
+                soup.select_one('.multimedia-content') or \
+                soup.select_one('article.post-content')
             
             if body:
                 for trash in body.select('.box-dautu, .related-news, table'):
@@ -134,10 +131,7 @@ class VneconomyCrawler(BaseCrawler):
             if not content_text: 
                 return None
 
-            # [LOGIC MỚI] Làm sạch Content: Xóa dòng trống thừa
-            # Tách dòng -> strip từng dòng -> bỏ dòng rỗng -> ghép lại
-            if content_text:
-                content_text = "\n".join([line.strip() for line in content_text.splitlines() if line.strip()])
+            content_text = "\n".join([line.strip() for line in content_text.splitlines() if line.strip()])
 
             if content_keyword and content_keyword.lower() not in content_text.lower(): 
                 return None
@@ -196,7 +190,8 @@ class VneconomyCrawler(BaseCrawler):
                     t_text = span.text.strip() if span else tag.text.strip()
                     if t_text: tags.append(t_text)
 
-            article_id = str(uuid.uuid4())
+            article_id = str(uuid.uuid5(uuid.NAMESPACE_URL, url))
+
             article_data.update({
                 'article_id': article_id,
                 'summary': sapo_text,
