@@ -9,6 +9,7 @@ import { Topic, TopicDocument } from './schemas/topic.schemas';
 import { SystemLogService } from '../common/SystemLog/system-loc.service';
 import { AdminSearchArticleDto, ArticleStatus } from './dto/admin.dto';
 import { MeiliSearchService } from '../common/meilisearch/meilisearch.service';
+import { QdrantService } from '../common/qdrant/qdrant.service';
 @Injectable()
 export class AdminService {
   private readonly logger = new Logger(AdminService.name);
@@ -21,6 +22,7 @@ export class AdminService {
     private readonly systemLogService: SystemLogService,
     private readonly httpService: HttpService,
     private readonly meiliService: MeiliSearchService,
+    private readonly qdrantService: QdrantService,
   ) {}
 
 
@@ -116,55 +118,54 @@ export class AdminService {
     const page = dto.page || 1;
     const limit = dto.limit || 20;
     const offset = (page - 1) * limit;
+    const filterArray: string[] = [];
 
-    const filterArray = [];
+    if (dto.website) filterArray.push(`website = "${dto.website}"`);
+    if (dto.status) filterArray.push(`status = "${dto.status}"`);
+    if (dto.topic) filterArray.push(`site_categories = "${dto.topic}"`);
 
-    if (dto.website) {
-        filterArray.push(`website = "${dto.website}"`);
+    if (dto.startDate) {
+        const startTs = new Date(dto.startDate).getTime();
+        filterArray.push(`publish_date >= ${startTs}`);
+    }
+    if (dto.endDate) {
+        const endTs = new Date(dto.endDate).setHours(23, 59, 59, 999);
+        filterArray.push(`publish_date <= ${endTs}`);
     }
 
-    if (dto.status) {
-        filterArray.push(`status = "${dto.status}"`);
-    }
+    if (dto.minSentiment !== undefined) filterArray.push(`ai_sentiment_score >= ${dto.minSentiment}`);
+    if (dto.maxSentiment !== undefined) filterArray.push(`ai_sentiment_score <= ${dto.maxSentiment}`);
 
-    if (dto.topic) {
-        filterArray.push(`site_categories = "${dto.topic}"`);
+    let sort = ['publish_date:desc'];
+    
+    if (dto.sort && dto.sort.length > 0) {
+        sort = dto.sort;
     }
-
-    const sort = dto.sort ? [dto.sort] : ['publish_date:desc'];
 
     const query = dto.q || '';
 
     try {
+
       const result = await this.meiliService.search(query, {
-        limit,
-        offset,
-        filter: filterArray.length > 0 ? filterArray.join(' AND ') : undefined,
-        sort: sort,
+        limit, 
+        offset, 
+        filter: filterArray.join(' AND '), 
+        sort: sort, 
         showMatchesPosition: true,
-        attributesToRetrieve: [
-            'article_id',
-            'title',
-            'url',
-            'site_categories',
-            'ai_sentiment_score',
-            'status',
-            'publish_date'
-        ]
+        attributesToRetrieve: ['article_id', 'title', 'url', 'site_categories', 'ai_sentiment_score', 'status', 'publish_date', 'website', 'summary']
       });
 
       return {
-        data: result.hits,
+        data: result.hits.map(hit => ({ ...hit, publish_date_iso: new Date(hit.publish_date).toISOString() })),
         total: result.estimatedTotalHits || result.hits.length,
-        page,
-        limit,
+        page, limit, totalPages: Math.ceil((result.estimatedTotalHits || result.hits.length) / limit),
         processingTimeMs: result.processingTimeMs,
-        appliedFilters: filterArray,
+        appliedFilters: filterArray, 
         appliedSort: sort
       };
     } catch (error) {
       this.logger.error('Admin search failed', error);
-      throw new InternalServerErrorException('Lỗi tìm kiếm từ MeiliSearch');
+      throw new InternalServerErrorException('Lỗi tìm kiếm từ MeiliSearch: ' + error.message);
     }
   }
 
@@ -178,7 +179,6 @@ export class AdminService {
 
     if (!article) throw new NotFoundException('Không tìm thấy bài viết');
 
-    // 2. Cập nhật MeiliSearch (Để filter status hoạt động)
     try {
       await this.meiliService.updateDocuments([{
         article_id: articleId,
@@ -193,30 +193,54 @@ export class AdminService {
     return article;
   }
 
-  // Xóa cứng bài viết
   async deleteArticle(articleId: string) {
-    const article = await this.articleModel.findByIdAndDelete(articleId);
-    if (!article) throw new NotFoundException('Không tìm thấy bài viết');
-
+    this.logger.log(`Request to delete article: ${articleId}`);
+    
     try {
-      await this.meiliService.deleteDocument(articleId);
-    } catch (e) {
-      this.logger.warn(`Failed to delete document in MeiliSearch for ${articleId}`, e);
-    }
+        const article = await this.articleModel.findOneAndDelete({ article_id: articleId });
+        
+        if (!article) {
+            throw new NotFoundException(`Không tìm thấy bài viết với article_id: ${articleId}`);
+        }
 
-    await this.systemLogService.createLog('DELETE_ARTICLE', 'WARN', { articleId }, 'admin');
-    return { message: 'Deleted successfully' };
+        const results = await Promise.allSettled([
+            this.meiliService.deleteDocument(articleId),
+            
+            // [FIX] Dùng deleteByFilter vì article_id nằm trong payload
+            this.qdrantService.deleteByFilter(articleId) 
+        ]);
+
+        results.forEach((result, index) => {
+            const service = index === 0 ? 'MeiliSearch' : 'Qdrant';
+            if (result.status === 'rejected') {
+                this.logger.warn(`Failed to delete in ${service} for ${articleId}`, result.reason);
+            } else {
+                this.logger.log(`Successfully deleted in ${service} for ${articleId}`);
+            }
+        });
+
+        await this.systemLogService.createLog('DELETE_ARTICLE', 'WARN', { articleId }, 'admin');
+        return { message: 'Deleted successfully from all databases' };
+
+    } catch (error) {
+        if (error instanceof NotFoundException) throw error;
+        
+        this.logger.error(`Delete article ${articleId} failed`, error);
+        throw new InternalServerErrorException('Lỗi hệ thống khi xóa bài viết');
+    }
   }
 
-  // --- QUẢN LÝ MEILISEARCH (SYSTEM OPS) ---
+  async getMeiliStats() { return this.meiliService.getStats(); }
 
-  async getMeiliStats() {
-    return this.meiliService.getStats();
+  async configureMeiliSearch() {
+      return this.meiliService.updateIndexSettings();
   }
 
   async syncToMeiliSearch() {
-    this.logger.log('Starting full sync from MongoDB to MeiliSearch...');
+    this.logger.log('Starting full sync...');
     await this.systemLogService.createLog('SYNC_START', 'INFO', {}, 'admin');
+
+    await this.configureMeiliSearch();
 
     try {
         const batchSize = 1000;
@@ -226,17 +250,23 @@ export class AdminService {
 
         for (let doc = await cursor.next(); doc != null; doc = await cursor.next()) {
             const obj = doc.toObject();
+            let publishTimestamp = 0;
+
+            if (obj.publish_date) {
+                publishTimestamp = new Date(obj.publish_date).getTime();
+            } else if ((obj as any).createdAt) {
+                publishTimestamp = new Date((obj as any).createdAt).getTime();
+            }
+
             batch.push({
                 article_id: obj._id.toString(),
                 id: obj._id.toString(),
                 title: obj.title,
                 summary: obj.summary,
-                content: obj.content,
                 website: obj.website,
-                publish_date: obj.publish_date,
+                publish_date: publishTimestamp,
                 url: obj.url,
-                ai_sentiment_score: obj.ai_sentiment_score,
-                ai_summary: (obj as any).ai_summary,
+                ai_sentiment_score: obj.ai_sentiment_score || 0,
                 site_categories: (obj as any).site_categories,
                 status: (obj as any).status || 'visible'
             });
@@ -245,10 +275,8 @@ export class AdminService {
                 await this.meiliService.addDocuments(batch);
                 totalSynced += batch.length;
                 batch = [];
-                this.logger.log(`Synced ${totalSynced} documents...`);
             }
         }
-
         if (batch.length > 0) {
             await this.meiliService.addDocuments(batch);
             totalSynced += batch.length;
@@ -256,7 +284,6 @@ export class AdminService {
 
         await this.systemLogService.createLog('SYNC_SUCCESS', 'INFO', { total: totalSynced }, 'admin');
         return { message: 'Sync completed', total: totalSynced };
-
     } catch (error) {
         this.logger.error('Sync failed', error);
         await this.systemLogService.createLog('SYNC_FAILED', 'ERROR', { error: error.message }, 'admin');
@@ -264,7 +291,7 @@ export class AdminService {
     }
   }
 
-  // Lấy danh sách chủ đề theo Website (Query trực tiếp từ collection Topics)
+  // Lấy danh sách chủ đề theo Website
   async getTopicsByWebsite(website: string) {
     const query = website ? { website } : {};
     
@@ -279,7 +306,7 @@ export class AdminService {
     return topics;
   }
 
-  // Lấy bài báo theo chủ đề (Phân trang)
+  // Lấy bài báo theo chủ đề
   async getArticlesByTopic(topicName: string, website: string, page: number, limit: number) {
       const skip = (page - 1) * limit;
       const query: any = { 

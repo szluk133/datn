@@ -9,40 +9,46 @@ export class MeiliSearchService implements OnModuleInit {
 
     constructor() {
         this.client = new MeiliSearch({
-        host: process.env.MEILISEARCH_URL,
-        apiKey: process.env.MEILISEARCH_KEY,
+            host: process.env.MEILISEARCH_URL,
+            apiKey: process.env.MEILISEARCH_KEY,
         });
     }
 
     async onModuleInit() {
         this.index = this.client.index('articles');
-        
+        await this.updateIndexSettings();
+    }
+
+    async updateIndexSettings() {
+        this.logger.log('Updating MeiliSearch Index Settings...');
         try {
-        await this.index.updateFilterableAttributes([
-            'article_id',
-            'website',
-            'site_categories',
-            'publish_date',
-            'ai_sentiment_score',
-            'status', 
-            'search_id'
-        ]);
+            await this.index.updateFilterableAttributes([
+                'article_id',
+                'website',
+                'site_categories',
+                'publish_date',
+                'ai_sentiment_score',
+                'status', 
+                'search_id'
+            ]);
 
-        await this.index.updateSortableAttributes([
-            'publish_date', 
-            'ai_sentiment_score'
-        ]);
+            await this.index.updateSortableAttributes([
+                'publish_date', 
+                'ai_sentiment_score'
+            ]);
 
-        await this.index.updateSearchableAttributes([
-            'title',
-            'summary',
-            'content',
-            'ai_summary'
-        ]);
+            await this.index.updateSearchableAttributes([
+                'title',
+                'summary',
+                'content',
+                'ai_summary'
+            ]);
 
-        this.logger.log('MeiliSearch attributes updated successfully (Phase 2 Config)');
+            this.logger.log('MeiliSearch attributes updated successfully.');
+            return { status: 'success', message: 'MeiliSearch Settings Updated' };
         } catch (error) {
-        this.logger.error('Failed to init MeiliSearch attributes', error);
+            this.logger.error('Failed to update MeiliSearch attributes', error);
+            throw error;
         }
     }
 
@@ -54,27 +60,22 @@ export class MeiliSearchService implements OnModuleInit {
         return this.index.search(query, options);
     }
 
-    // Lấy thông số kỹ thuật (Stats)
     async getStats() {
         return this.index.getStats();
     }
 
-    // Xóa tài liệu (Khi Admin xóa cứng)
     async deleteDocument(id: string) {
         return this.index.deleteDocument(id);
     }
 
-    // Cập nhật một phần tài liệu (Ví dụ: Update status = hidden)
     async updateDocuments(documents: any[]) {
         return this.index.updateDocuments(documents);
     }
 
-    // Thêm mới/Ghi đè tài liệu
     async addDocuments(documents: any[]) {
         return this.index.addDocuments(documents);
     }
 
-    // Xóa toàn bộ documents
     async deleteAllDocuments() {
         return this.index.deleteAllDocuments();
     }

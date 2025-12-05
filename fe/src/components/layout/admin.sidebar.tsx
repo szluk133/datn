@@ -21,7 +21,7 @@ const AdminSideBar = () => {
     const items: MenuItem[] = [
         {
             key: 'grp',
-            label: 'Admin Panel',
+            label: 'Admin',
             type: 'group',
             children: [
                 {

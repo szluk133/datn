@@ -111,7 +111,7 @@ const TopicList = (props: IProps) => {
                     loading={loadingInit}
                     disabled={!selectedWebsite}
                 >
-                    Cập nhật chủ đề từ HTML
+                    Cập nhật chủ đề
                 </Button>
             </div>
 

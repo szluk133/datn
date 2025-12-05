@@ -1,5 +1,5 @@
-import { IsString, IsOptional, IsEnum, IsNumber, Min, IsArray } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsString, IsOptional, IsEnum, IsNumber, Min, Max, IsDateString } from 'class-validator';
+import { Type, Transform } from 'class-transformer';
 
 export enum ArticleStatus {
     VISIBLE = 'visible',
@@ -7,31 +7,58 @@ export enum ArticleStatus {
     SPAM = 'spam'
 }
 
-    export class UpdateArticleStatusDto {
+export class UpdateArticleStatusDto {
     @IsEnum(ArticleStatus)
     status: ArticleStatus;
-    }
+}
 
-    export class AdminSearchArticleDto {
+export class AdminSearchArticleDto {
     @IsOptional()
     @IsString()
-    q?: string; // Keyword
+    q?: string;
 
     @IsOptional()
     @IsString()
     website?: string;
 
     @IsOptional()
-    @IsString()
-    status?: string;
+    @IsEnum(ArticleStatus)
+    status?: ArticleStatus;
 
     @IsOptional()
     @IsString()
     topic?: string;
 
     @IsOptional()
-    @IsString()
-    sort?: string;
+    @IsDateString()
+    startDate?: string;
+
+    @IsOptional()
+    @IsDateString()
+    endDate?: string;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @Min(-1)
+    @Max(1)
+    minSentiment?: number;
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @Min(-1)
+    @Max(1)
+    maxSentiment?: number;
+
+    @IsOptional()
+    @Transform(({ value }) => {
+        if (typeof value === 'string') return [value];
+        if (Array.isArray(value)) return value;
+        return value;
+    })
+    @IsString({ each: true })
+    sort?: string[];
 
     @IsOptional()
     @Type(() => Number)

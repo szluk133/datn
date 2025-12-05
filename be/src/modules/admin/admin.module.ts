@@ -8,12 +8,14 @@ import { HttpModule } from '@nestjs/axios';
 import { Topic, TopicSchema } from './schemas/topic.schemas';
 
 import { ArticleModule } from '../article/article.module';
+import { QdrantModule } from '../common/qdrant/qdrant.module';
 
 @Module({
   imports: [
     ArticleModule,
     SystemLogModule,
     HttpModule,
+    QdrantModule,
 
     MongooseModule.forFeature([
       { name: SystemLog.name, schema: SystemLogSchema },
