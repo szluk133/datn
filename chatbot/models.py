@@ -2,8 +2,13 @@ from pydantic import BaseModel, Field
 from typing import Optional, List, Literal
 
 class ChatHistory(BaseModel):
+    """
+    Mô hình cho một cặp hỏi-đáp trong lịch sử chat.
+    """
     query: str
     answer: str
+    intent: Optional[str] = None
+    dependency: Optional[str] = None
 
 class ChatContext(BaseModel):
     """
@@ -20,12 +25,11 @@ class ChatRequest(BaseModel):
     user_id: str = Field(..., description="ID định danh người dùng.")
     query: str = Field(..., description="Câu hỏi của người dùng.")
     conversation_id: Optional[str] = Field(None, description="ID của phiên hội thoại hiện tại.")
-    
     context: ChatContext = Field(default_factory=ChatContext, description="Ngữ cảnh trang web hiện tại.")
 
 class SourcedAnswer(BaseModel):
     """
-    Đại diện cho một nguồn bài báo.
+    Đại diện cho một nguồn thông tin (bài báo).
     """
     article_id: str = Field(..., description="ID của bài báo nguồn.")
     title: str = Field(..., description="Tiêu đề của bài báo nguồn.")
@@ -38,5 +42,6 @@ class ChatResponse(BaseModel):
     answer: str = Field(..., description="Câu trả lời tổng hợp cuối cùng.")
     conversation_id: str = Field(..., description="ID của phiên hội thoại.")
     sources: List[SourcedAnswer] = Field(default=[], description="Danh sách nguồn tham khảo.")
-    intent_detected: Optional[str] = Field(None, description="Loại ý định hệ thống phát hiện (Debug).")
-    strategy_used: Optional[str] = Field(None, description="Chiến lược RAG đã dùng (Summary First vs Deep Dive).")
+    intent_detected: Optional[str] = Field(None, description="Loại ý định hệ thống phát hiện.")
+    dependency_label: Optional[str] = Field(None, description="Nhãn câu hỏi (main/sub).")
+    strategy_used: Optional[str] = Field(None, description="Chiến lược RAG đã dùng.")

@@ -1,4 +1,4 @@
-import NextAuth, { DefaultSession } from "next-auth";
+import NextAuth, { DefaultSession, DefaultUser } from "next-auth";
 import { JWT } from "next-auth/jwt";
 
 export interface IArticle {
@@ -23,7 +23,6 @@ export interface IMeta {
     total: number;
 }
 
-// Định nghĩa cấu trúc cho một mục lịch sử tìm kiếm
 export interface ISearchHistory {
     _id: string;
     search_id: string;
@@ -34,13 +33,11 @@ export interface ISearchHistory {
     created_at?: string;
     timestamp?: number;
 }
-
-// Định nghĩa cấu trúc cho đối tượng User trả về từ API
 export interface IUser {
     _id: string;
     name: string;
     email: string;
-    role: 'admin' | 'client';
+    role: string;
 }
 
 // CHATBOT
@@ -102,7 +99,6 @@ export interface ISystemLog {
     timestamp: string;
 }
 
-// Source Sentiment
 export interface ISourceSentiment {
     source: string;
     avgSentiment: number;
@@ -114,17 +110,15 @@ export interface ISourceSentiment {
     };
 }
 
-// Category Distribution
 export interface ICategoryDistribution {
     category: string;
     count: number;
     percentage: number;
 }
 
-// Article Search Result (Admin)
 export interface IAdminArticle {
-    id: string; // MeiliSearch ID
-    _id: string; // Mongo ID
+    id: string; 
+    _id: string; 
     title: string;
     summary: string;
     website: string;
@@ -135,22 +129,30 @@ export interface IAdminArticle {
     status: 'visible' | 'hidden' | 'spam';
 }
 
-// Topic
 export interface ITopic {
     _id: string;
     name: string;
     website: string;
     slug?: string;
 }
-declare module "next-auth/jwt" {
-    interface JWT {
-        user: IUser;
+
+// AUTHENTICATION
+
+declare module "next-auth" {
+    interface Session {
+        user: IUser & DefaultSession["user"];
+        access_token: string;
+    }
+    interface User extends DefaultUser {
+        _id: string;
+        role: string;
         access_token: string;
     }
 }
 
-declare module "next-auth" {
-    interface Session {
+declare module "next-auth/jwt" {
+
+    interface JWT {
         user: IUser;
         access_token: string;
     }
