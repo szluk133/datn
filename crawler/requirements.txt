@@ -13,3 +13,4 @@ transformers
 torch
 numpy
 scikit-learn
+sse-starlette

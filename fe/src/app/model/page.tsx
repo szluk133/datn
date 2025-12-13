@@ -6,12 +6,11 @@ import { Button } from "antd";
 import { SearchOutlined } from "@ant-design/icons";
 import Link from "next/link";
 
-// Cập nhật Interface khớp với response thực tế: { data: { data: [], total: ... } }
 interface ISavedArticleResponse {
     data: any[]; 
     total: number;
-    page: number | string; // API trả về string "1"
-    limit: number | string; // API trả về string "10"
+    page: number | string;
+    limit: number | string;
     totalPages: number;
 }
 
@@ -32,37 +31,27 @@ const ModelHomePage = async ({
     if (session) {
         try {
             const res = await sendRequest<ISavedArticleResponse>({
-                // Thêm user_id vào query params giống API mẫu bạn cung cấp
                 url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/saved-articles?page=${page}&limit=${limit}&user_id=${session.user._id}`,
                 method: 'GET',
                 headers: { Authorization: `Bearer ${session.access_token}` },
             });
 
-            // Lấy object data bọc bên ngoài
             const responseData = res?.data;
 
-            // Kiểm tra và truy cập vào mảng data nằm lồng bên trong
             if (responseData && Array.isArray(responseData.data)) {
                 
                 savedArticles = responseData.data.map((item: any) => ({
                     ...item,
-                    // QUAN TRỌNG: Map article_id (string) thành _id/id để component ArticleItem hiểu
                     id: item.article_id, 
                     _id: item.article_id,
                     
-                    // Xử lý dữ liệu null từ API (Fallback values)
-                    // Nếu title null -> lấy article_title
                     title: item.title || item.article_title || "Không có tiêu đề",
-                    // Nếu url null -> lấy article_url
                     url: item.url || item.article_url || "#",
-                    // Nếu website null -> Hiện "N/A"
-                    website: item.website || "N/A",
-                    // Nếu publish_date null -> Lấy ngày hiện tại hoặc createdAt của record saved
+                    website: item.website,
                     publish_date: item.publish_date || item.createdAt || new Date().toISOString(),
-                    // Sentiment null -> 0
                     ai_sentiment_score: item.ai_sentiment_score ?? 0,
                     site_categories: item.site_categories || [],
-                    summary: item.summary || "Bài viết chưa có tóm tắt chi tiết."
+                    summary: item.summary
                 }));
 
                 meta = {
@@ -111,23 +100,4 @@ const ModelHomePage = async ({
 };
 
 export default ModelHomePage;
-
-// 'use client';
-
-// import ArticleList from "@/components/client/article/article.list";
-// import { Col, Row } from "antd";
-// import React from "react";
-
-
-// const ClientPage = () => {
-//     return (
-//         <Row justify="center">
-//             <Col xs={24} md={18} lg={12}>
-//                 <ArticleList />
-//             </Col>
-//         </Row>
-//     )
-// }
-
-// export default ClientPage;
 

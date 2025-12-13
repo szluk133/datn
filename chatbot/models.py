@@ -15,8 +15,19 @@ class ChatContext(BaseModel):
     Ngữ cảnh hiện tại của người dùng trên Frontend.
     """
     current_page: Literal["home_page", "list_page", "detail_page"] = Field("home_page", description="Trang người dùng đang đứng.")
-    search_id: Optional[str] = Field(None, description="ID phiên tìm kiếm (nếu ở trang list).")
+    
+    search_id: Optional[str] = Field(None, description="ID phiên tìm kiếm hiện tại.")
+    
     article_id: Optional[str] = Field(None, description="ID bài báo (nếu ở trang detail).")
+    
+    sort_by: Optional[Literal["publish_date", "sentiment", "relevance"]] = Field(
+        "relevance", 
+        description="Tiêu chí sắp xếp hiện tại trên Frontend (mặc định là độ liên quan/relevance)."
+    )
+    sort_order: Optional[Literal["asc", "desc"]] = Field(
+        "desc", 
+        description="Thứ tự sắp xếp: 'asc' (tăng dần) hoặc 'desc' (giảm dần)."
+    )
 
 class ChatRequest(BaseModel):
     """

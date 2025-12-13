@@ -1,6 +1,6 @@
-import { Controller, Post, Body, Get, Param, UsePipes, ValidationPipe, Query, Logger, NotFoundException, Res } from '@nestjs/common';
+import { Controller, Post, Body, Get, Param, UsePipes, ValidationPipe, Query, Logger, NotFoundException, Res, Sse, MessageEvent } from '@nestjs/common';
 import { ArticleService, CrawlStatusResponse } from './article.service';
-import { CrawlRequestDto } from './dto/crawl-request';
+import { CrawlRequestDto, CrawlTriggerResponseDto } from './dto/crawl-request';
 import { SearchHistoryResponseDto } from './dto/search-history';
 import { Article } from './schemas/article.schema';
 import { PaginationParamsDto, PaginatedArticleResponse } from './dto/pagination.dto';
@@ -9,12 +9,27 @@ import { SearchResponseDto } from './dto/search-response.dto';
 import { ExportSelectedDto } from './dto/export-selected.dto';
 import type { Response } from 'express';
 import { Public } from '@/decorator/customize';
+import { Observable } from 'rxjs';
 
 @Controller('article')
 export class ArticleController {
   private readonly logger = new Logger(ArticleController.name);
 
   constructor(private readonly articleService: ArticleService) {}
+
+  @Post('crawl')
+  @Public()
+  @UsePipes(new ValidationPipe({ transform: true }))
+  async triggerCrawl(@Body() crawlDto: CrawlRequestDto): Promise<CrawlTriggerResponseDto> {
+    this.logger.log(`API [POST /article/crawl] - User: ${crawlDto.user_id} - Keywords: ${crawlDto.keyword_search}`);
+    return this.articleService.triggerCrawlManual(crawlDto);
+  }
+
+  @Sse('stream-status/:searchId')
+  streamCrawlStatus(@Param('searchId') searchId: string): Observable<MessageEvent> {
+    this.logger.log(`API [SSE /article/stream-status/:searchId] - Connection opened for SearchID: ${searchId}`);
+    return this.articleService.subscribeToCrawlStatus(searchId);
+  }
 
   // Lấy danh sách website
   @Get('websites')
@@ -23,7 +38,7 @@ export class ArticleController {
     return this.articleService.getAllWebsites();
   }
 
-  // Kiểm tra trạng thái crawl (API MỚI)
+  // Kiểm tra trạng thái crawl
   @Get('status/:searchId')
   async getCrawlStatus(@Param('searchId') searchId: string): Promise<CrawlStatusResponse> {
     this.logger.log(`API [GET /article/status/:searchId] - SearchID: ${searchId}`);
@@ -58,7 +73,7 @@ export class ArticleController {
     res.send(buffer);
   }
 
-  // Tìm kiếm bài báo mới
+  // Tìm kiếm bài báo (Legacy hoặc dùng cho search nội bộ DB)
   @Post('search')
   @UsePipes(new ValidationPipe({ transform: true }))
   async searchAndFetch(

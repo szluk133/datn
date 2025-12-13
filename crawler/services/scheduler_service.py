@@ -23,10 +23,9 @@ from qdrant_client.models import PointStruct
 
 scheduler = AsyncIOScheduler()
 
-TOPIC_CONCURRENCY_LIMIT = 3 
+TOPIC_CONCURRENCY_LIMIT = 5 
 topic_semaphore = asyncio.Semaphore(TOPIC_CONCURRENCY_LIMIT)
 
-# --- WORKER 1: ENRICHMENT ---
 async def enrichment_worker():
     articles_col = get_articles_collection()
     qdrant = get_qdrant_client()
@@ -34,72 +33,69 @@ async def enrichment_worker():
     embed_service = get_embedding_service()
     
     try:
-        # [TỐI ƯU] Tăng batch size lên 10
-        cursor = articles_col.find({'status': {'$in': ['raw', 'ai_error']}}).limit(10)
-        articles = await cursor.to_list(length=10)
+        cursor = articles_col.find({'status': {'$in': ['raw', 'ai_error']}}).limit(20)
+        articles = await cursor.to_list(length=20)
     except Exception: return
 
     if not articles: return
     
-    print(f"[WORKER] Đang xử lý AI cho {len(articles)} bài viết...")
+    print(f"[WORKER] Bắt đầu xử lý AI cho {len(articles)} bài viết...")
+    
+    ids_to_process = [doc['_id'] for doc in articles]
+    await articles_col.update_many(
+        {'_id': {'$in': ids_to_process}},
+        {'$set': {'status': 'processing'}}
+    )
 
     for article in articles:
-        # Đánh dấu đang xử lý để worker khác không lấy trùng
-        await articles_col.update_one({'_id': article['_id']}, {'$set': {'status': 'processing'}})
-        
         try:
-            # Ưu tiên dùng content, fallback sang summary
             content_for_analysis = article.get('content', '')
             if not content_for_analysis:
                 content_for_analysis = article.get('summary', '')
 
-            ai_result = await analyze_content_local(content_for_analysis)
-            
-            # [CHECK] Đảm bảo tóm tắt tối đa 3 câu
-            raw_summary = ai_result.get('summary', [])
-            final_summary = raw_summary[:3] if raw_summary else []
+            if len(content_for_analysis) < 50:
+                updates = {
+                    'last_enriched_at': datetime.datetime.now(),
+                    'ai_summary': [],
+                    'ai_sentiment_score': 0.0,
+                    'status': 'enriched'
+                }
+            else:
+                ai_result = await analyze_content_local(content_for_analysis)
+                raw_summary = ai_result.get('summary', [])
+                final_summary = raw_summary[:3] if raw_summary else []
 
-            updates = {
-                'last_enriched_at': datetime.datetime.now(),
-                'ai_summary': final_summary,
-                'ai_sentiment_score': ai_result.get('sentiment_score', 0.0),
-                'status': 'enriched'
-            }
+                updates = {
+                    'last_enriched_at': datetime.datetime.now(),
+                    'ai_summary': final_summary,
+                    'ai_sentiment_score': ai_result.get('sentiment_score', 0.0),
+                    'status': 'enriched'
+                }
             
-            # Cập nhật Mongo
             await articles_col.update_one({'_id': article['_id']}, {'$set': updates})
             
-            # Update Meilisearch
+            # Đồng bộ sang Meilisearch
             if meili:
                 try:
-                    index = meili.index("articles")
-                    # Đảm bảo search_id lấy từ DB ra, nếu không có thì default mảng
+                    article.update(updates)
                     s_id_val = article.get('search_id')
                     if not s_id_val: s_id_val = ['system_auto']
                     elif isinstance(s_id_val, str): s_id_val = [s_id_val]
-
-                    update_doc = {
-                        'article_id': article.get('article_id'),
-                        'ai_sentiment_score': updates['ai_sentiment_score'],
-                        'ai_summary': updates['ai_summary'],
-                        'search_id': s_id_val
-                    }
-                    await index.update_documents([update_doc])
+                    article['search_id'] = s_id_val
+                    
+                    await sync_to_meilisearch([article])
                 except Exception as e:
-                    print(f"[MEILI ERROR] Update AI failed: {e}")
+                    print(f"[MEILI ERROR] Sync failed: {e}")
 
-            # Update Qdrant
+            # Đồng bộ sang Qdrant
             if qdrant and updates['status'] == 'enriched':
                 points = []
-                content_text = article.get('content', '')
-                if not content_text: content_text = article.get('summary', '')
+                content_text = article.get('content', '') or article.get('summary', '')
                 
-                # Chuẩn bị search_id cho Qdrant
                 s_id_val = article.get('search_id')
                 if not s_id_val: s_id_val = ['system_auto']
                 elif isinstance(s_id_val, str): s_id_val = [s_id_val]
 
-                # 1. CHUNKS
                 chunks = split_text_into_chunks(article.get('article_id'), content_text)
                 for chunk in chunks:
                     vector = await embed_service.get_embedding_async(chunk['text'])
@@ -122,7 +118,6 @@ async def enrichment_worker():
                     }
                     points.append(PointStruct(id=qdrant_chunk_id, vector=vector, payload=chunk_payload))
                 
-                # 2. AI SUMMARY
                 ai_summary_list = updates.get('ai_summary', [])
                 if ai_summary_list:
                     summary_text_joined = "\n".join(ai_summary_list)
@@ -145,13 +140,16 @@ async def enrichment_worker():
                         points.append(PointStruct(id=summary_point_id, vector=summary_vector, payload=summary_payload))
 
                 if points:
-                    await qdrant.upsert(collection_name=QDRANT_COLLECTION, points=points)
+
+                    if hasattr(qdrant, 'upsert'):
+                        await qdrant.upsert(collection_name=QDRANT_COLLECTION, points=points)
                     
         except Exception as e:
             print(f"[WORKER ERROR] Lỗi bài {article.get('url')}: {e}")
             await articles_col.update_one({'_id': article['_id']}, {'$set': {'status': 'ai_error'}})
+            
+    print(f"[WORKER] Hoàn tất batch {len(articles)} bài.")
 
-# --- WORKER 2: AUTO-CRAWL ---
 async def process_single_topic(topic, crawler, articles_col, topics_col, cutoff_date):
     async with topic_semaphore: 
         site = topic['website']
@@ -163,7 +161,6 @@ async def process_single_topic(topic, crawler, articles_col, topics_col, cutoff_
         stop_topic = False
         new_count = 0
         
-        # [UPDATED] Tăng giới hạn lên 50 trang
         while page <= 50 and not stop_topic: 
             try:
                 soup = await crawler.fetch_category_page(url, page)
@@ -192,7 +189,6 @@ async def process_single_topic(topic, crawler, articles_col, topics_col, cutoff_
                         ops = []
                         for d in valid_res:
                             if 'current_search_id' in d: del d['current_search_id']
-                            
                             ops.append(UpdateOne(
                                 {'url': d['url']}, 
                                 {'$set': d, '$addToSet': {'search_id': "system_auto"}}, 
@@ -223,7 +219,12 @@ async def execute_topic_crawl(website_filter: Optional[str] = None):
     try: topics = await topics_col.find(query).to_list(length=100)
     except: return
     if not topics: return
-    async with httpx.AsyncClient(headers=HEADERS, timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
+    
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+    }
+    
+    async with httpx.AsyncClient(headers=headers, timeout=REQUEST_TIMEOUT, follow_redirects=True) as client:
         crawler_instances = {}
         if website_filter == 'vneconomy.vn' or website_filter is None: crawler_instances['vneconomy.vn'] = VneconomyCrawler(client)
         if website_filter == 'vnexpress.net' or website_filter is None: crawler_instances['vnexpress.net'] = VnExpressCrawler(client)
@@ -252,9 +253,7 @@ def start_scheduler():
     import threading
     threading.Thread(target=local_ai_service.load_model).start()
     
-    # [CHANGE] Tăng tốc độ: Chạy mỗi 5 giây, xử lý tối đa 10 bài/lần
-    # max_instances=2: Cho phép chạy chồng nếu lỡ bị chậm đột xuất
-    scheduler.add_job(enrichment_worker, IntervalTrigger(seconds=5), id='enrichment', replace_existing=True, max_instances=2)
+    scheduler.add_job(enrichment_worker, IntervalTrigger(seconds=30), id='enrichment', replace_existing=True, max_instances=2)
     
     scheduler.add_job(execute_topic_crawl, IntervalTrigger(hours=2), id='topic_crawl', replace_existing=True)
     scheduler.start()

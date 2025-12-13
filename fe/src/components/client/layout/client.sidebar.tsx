@@ -9,7 +9,7 @@ import {
     TagOutlined 
 } from '@ant-design/icons';
 import { useSession } from 'next-auth/react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import type { MenuProps } from 'antd';
 import { ClientContext } from '@/components/client/layout/client.context'; 
 import { sendRequest } from '@/utils/api';
@@ -24,6 +24,7 @@ const ClientSidebar = () => {
     const router = useRouter();
     const searchParams = useSearchParams();
 
+    // Lấy Context để nhận dữ liệu history mới nhất từ ArticleList
     const clientContext = useContext(ClientContext);
     
     const [isCollapsed, setIsCollapsed] = useState(false);
@@ -46,13 +47,11 @@ const ClientSidebar = () => {
         setSelectedMenuKey(currentSearchId);
     }, [currentSearchId]);
 
-    // Hàm helper đa năng để trích xuất thời gian từ item
-    // Thứ tự ưu tiên: search_id (Business Logic) -> createdAt (DB Time) -> timestamp -> _id (MongoID)
+    // Hàm helper: Trích xuất timestamp để sắp xếp
     const getItemTime = (item: any): number => {
-        // 1. Kiểm tra search_id (Dạng chuẩn: 20251122111518_...)
-        // Đây là ưu tiên cao nhất vì nó thể hiện thời gian search thực tế
+        // 1. Ưu tiên lấy từ search_id (định dạng yyyyMMddHHmmss...)
         if (item.search_id && typeof item.search_id === 'string') {
-            const match = item.search_id.match(/^(\d{14})/); // Lấy 14 số đầu
+            const match = item.search_id.match(/^(\d{14})/); 
             if (match) {
                 const dateStr = match[1];
                 const y = parseInt(dateStr.substring(0, 4));
@@ -65,32 +64,20 @@ const ClientSidebar = () => {
                 if (!isNaN(t)) return t;
             }
         }
-
-        // 2. Kiểm tra createdAt (Nếu backend trả về trường này)
+        // 2. Fallback sang createdAt
         if (item.createdAt) {
             const t = new Date(item.createdAt).getTime();
             if (!isNaN(t)) return t;
         }
-
-        // 3. Kiểm tra timestamp (Nếu có)
-        if (item.timestamp) {
-            const t = new Date(item.timestamp).getTime();
-            if (!isNaN(t)) return t;
-        }
-
-        // 4. Fallback: Lấy thời gian từ _id của MongoDB (8 ký tự hex đầu)
-        if (item._id && typeof item._id === 'string' && item._id.length === 24) {
-            const t = parseInt(item._id.substring(0, 8), 16) * 1000;
-            if (!isNaN(t)) return t;
-        }
-
-        return 0; // Không xác định được
+        return 0; 
     };
 
+    // Effect: Fetch lịch sử khi component mount (lần đầu vào trang)
     useEffect(() => {
         const fetchHistory = async () => {
             if (session?.user?._id) {
                 const currentTs = new Date().getTime();
+                // Thêm timestamp để tránh cache
                 const url = `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/article/history/${session.user._id}?_t=${currentTs}`;
 
                 try {
@@ -101,15 +88,10 @@ const ClientSidebar = () => {
                     });
 
                     if (res?.data && Array.isArray(res.data)) {
-                        // Sắp xếp lại danh sách nhận được từ API
-                        // Đảm bảo dù API trả về thứ tự nào, Client vẫn hiện Mới nhất lên đầu
+                        // Sắp xếp Client-side để đảm bảo mới nhất lên đầu
                         const sortedHistory = [...res.data].sort((a, b) => {
                             return getItemTime(b) - getItemTime(a);
                         });
-
-                        // Lưu ý: Nếu Backend trả sai 10 item (trả 10 item cũ nhất), 
-                        // thì sortedHistory cũng chỉ là "10 item cũ nhất được sắp xếp lại".
-                        // Bạn CẦN sửa Backend: .sort({ _id: -1 }) để lấy đúng 10 item mới nhất.
                         setSearchHistory(sortedHistory);
                     } else {
                         setSearchHistory([]);
@@ -125,6 +107,7 @@ const ClientSidebar = () => {
             }
         };
 
+        // Chỉ fetch nếu chưa có dữ liệu hoặc user thay đổi
         if (session?.user?._id && searchHistory.length === 0) {
             setIsLoadingHistory(true);
             fetchHistory();
@@ -133,6 +116,7 @@ const ClientSidebar = () => {
             setSearchHistory([]);
             setIsLoadingHistory(false);
         }
+        // Nếu đã có data (do ArticleList setContext hoặc lần load trước), tắt loading
         else if (session?.user?._id && searchHistory.length > 0 && isLoadingHistory) {
             setIsLoadingHistory(false);
         }

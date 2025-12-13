@@ -38,6 +38,12 @@ export class Context {
 
     @Prop()
     article_id?: string;
+
+    @Prop()
+    sort_by?: string;
+
+    @Prop()
+    sort_order?: string;
 }
 export const ContextSchema = SchemaFactory.createForClass(Context);
 

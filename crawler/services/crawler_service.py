@@ -25,6 +25,20 @@ def json_serializable(obj):
         return {k: json_serializable(v) for k, v in obj.items()}
     return obj
 
+async def qdrant_search_wrapper(client, collection_name, query_vector, **kwargs):
+    try:
+        if hasattr(client, 'search'):
+            return await client.search(collection_name=collection_name, query_vector=query_vector, **kwargs)
+        elif hasattr(client, 'search_points'):
+            return await client.search_points(collection_name=collection_name, vector=query_vector, **kwargs)
+        elif hasattr(client, 'query_points'):
+            return await client.query_points(collection_name=collection_name, query=query_vector, **kwargs)
+        else:
+            return []
+    except Exception as e:
+        print(f"[QDRANT WRAPPER ERROR] {e}")
+        return []
+
 async def check_duplicate_with_qdrant(title: str, summary: str) -> bool:
     qdrant = get_qdrant_client()
     embed_service = get_embedding_service()
@@ -33,7 +47,15 @@ async def check_duplicate_with_qdrant(title: str, summary: str) -> bool:
         text_to_check = f"{title} {summary}"
         vector = await embed_service.get_embedding_async(text_to_check)
         if not vector: return False
-        search_result = await qdrant.search(collection_name=QDRANT_COLLECTION, query_vector=vector, limit=1, with_payload=True, score_threshold=0.90)
+        
+        search_result = await qdrant_search_wrapper(
+            qdrant, 
+            collection_name=QDRANT_COLLECTION, 
+            query_vector=vector, 
+            limit=1, 
+            with_payload=True, 
+            score_threshold=0.90
+        )
         if search_result: return True
     except Exception: return False
     return False
@@ -49,7 +71,16 @@ async def search_relevant_articles_for_chat(user_query: str, top_k: int = 3, use
         if user_id_filter:
             filter_conditions.append(FieldCondition(key="user_id", match=MatchAny(any=[user_id_filter, "system", "system_auto"])))
         search_filter = Filter(must=filter_conditions) if filter_conditions else None
-        hits = await qdrant.search(collection_name=QDRANT_COLLECTION, query_vector=query_vector, query_filter=search_filter, limit=top_k, with_payload=True)
+        
+        hits = await qdrant_search_wrapper(
+            qdrant,
+            collection_name=QDRANT_COLLECTION, 
+            query_vector=query_vector, 
+            query_filter=search_filter, 
+            limit=top_k, 
+            with_payload=True
+        )
+        
         results = []
         for hit in hits:
             p = hit.payload
@@ -81,7 +112,6 @@ async def crawl_and_process_article(crawler, article_data, content_keyword, webs
                 site_categories = detailed.get('site_categories', [])
                 
                 final_search_keywords = []
-                
                 if isinstance(search_keyword, list) and search_keyword:
                     final_search_keywords.extend(search_keyword)
                 elif isinstance(search_keyword, str) and search_keyword and search_keyword != "auto_topic":
@@ -111,7 +141,6 @@ async def crawl_and_process_article(crawler, article_data, content_keyword, webs
 
 async def _crawl_task_wrapper(crawler, site_name, params, s_date, e_date, s_id, col):
     count = 0; page = 1
-    # [UPDATED] Tăng giới hạn quét lên 50 trang
     while count < params.max_articles and page <= 50: 
         soup = await crawler.fetch_search_page(params.keyword_search, page, s_date.strftime('%Y-%m-%d'), e_date.strftime('%Y-%m-%d'))
         if not soup: break
@@ -132,8 +161,10 @@ async def _crawl_task_wrapper(crawler, site_name, params, s_date, e_date, s_id, 
                 update_query = {'$set': d, '$addToSet': {'search_id': current_search_id}}
                 ops.append(UpdateOne({'url': d['url']}, update_query, upsert=True))
             if ops: await col.bulk_write(ops, ordered=False)
+            
             for d in valid_articles: d['search_id'] = [current_search_id]
             await sync_to_meilisearch(valid_articles)
+            
             count += len(valid_articles)
         page += 1
         await asyncio.sleep(1)
@@ -144,7 +175,14 @@ async def execute_crawl_task(crawlers_map, params, search_id):
     start_dt = datetime.datetime.strptime(params.start_date, '%d/%m/%Y')
     end_dt = datetime.datetime.strptime(params.end_date, '%d/%m/%Y')
     tasks = []
-    async with httpx.AsyncClient(headers={'User-Agent': 'HybridBot/4.0'}, timeout=None) as client:
+    
+    browser_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en-US;q=0.8,en;q=0.7'
+    }
+    
+    async with httpx.AsyncClient(headers=browser_headers, timeout=60.0, follow_redirects=True) as client:
         for name, crawler in crawlers_map.items():
             crawler.client = client
             tasks.append(_crawl_task_wrapper(crawler, name, params, start_dt, end_dt, search_id, articles_col))
@@ -158,9 +196,7 @@ async def perform_hybrid_search(params, crawlers_map, search_id) -> Tuple[int, s
     
     start_dt = datetime.datetime.strptime(params.start_date, '%d/%m/%Y')
     end_dt = datetime.datetime.strptime(params.end_date, '%d/%m/%Y')
-    target_end_index = params.page * params.page_size
-
-    # --- 1. SEARCHING ---
+    
     async def search_lexical():
         hits = []
         if meili:
@@ -172,14 +208,20 @@ async def perform_hybrid_search(params, crawlers_map, search_id) -> Tuple[int, s
                     conditions.append(f"({' OR '.join(site_filters)})")
                 filter_query = " AND ".join(conditions)
                 
-                search_params = {
-                    "filter": filter_query, 
-                    "limit": params.max_articles + 10
-                }
+                search_params = { "filter": filter_query, "limit": params.max_articles + 20 }
                 res = await meili.index("articles").search(params.keyword_search, **search_params)
-                hits = res.hits
-            except Exception as e:
-                print(f"[MEILI SEARCH ERROR] {e}")
+                raw_hits = res.hits
+                
+                if params.keyword_content:
+                    kw_content_lower = params.keyword_content.lower()
+                    hits = []
+                    for h in raw_hits:
+                        content_body = (h.get('content') or "").lower()
+                        summary_body = (h.get('summary') or "").lower()
+                        if kw_content_lower in content_body or kw_content_lower in summary_body:
+                            hits.append(h)
+                else: hits = raw_hits
+            except Exception as e: print(f"[MEILI SEARCH ERROR] {e}")
         return hits
 
     async def search_semantic():
@@ -190,11 +232,21 @@ async def perform_hybrid_search(params, crawlers_map, search_id) -> Tuple[int, s
                 if params.websites and len(params.websites) > 0:
                     q_filter_conditions.append(FieldCondition(key="website", match=MatchAny(any=params.websites)))
                 q_filter = Filter(must=q_filter_conditions) if q_filter_conditions else None
+                
                 vector = await embed_service.get_embedding_async(params.keyword_search)
                 if vector:
-                    q_res = await qdrant.search(collection_name=QDRANT_COLLECTION, query_vector=vector, query_filter=q_filter, limit=params.max_articles + 10, score_threshold=0.55, with_payload=True)
+                    q_res = await qdrant_search_wrapper(qdrant, collection_name=QDRANT_COLLECTION, query_vector=vector, query_filter=q_filter, limit=params.max_articles + 20, score_threshold=0.55, with_payload=True)
+                    
+                    kw_content_lower = params.keyword_content.lower() if params.keyword_content else ""
                     for hit in q_res:
                         p = hit.payload
+                        if kw_content_lower:
+                            text_check = (p.get('text') or "").lower()
+                            summary_check = ""
+                            if isinstance(p.get('summary_text'), list): summary_check = " ".join(p.get('summary_text')).lower()
+                            elif isinstance(p.get('summary_text'), str): summary_check = (p.get('summary_text') or "").lower()
+                            if kw_content_lower not in text_check and kw_content_lower not in summary_check: continue
+
                         pub_date_str = p.get('publish_date')
                         if pub_date_str:
                             try:
@@ -202,21 +254,18 @@ async def perform_hybrid_search(params, crawlers_map, search_id) -> Tuple[int, s
                                 if start_dt <= p_date <= end_dt + datetime.timedelta(days=1):
                                     hits.append({'article_id': p.get('article_id'), 'url': p.get('url'), 'publish_date': pub_date_str})
                             except: pass
-            except Exception as e:
-                print(f"[QDRANT SEARCH ERROR] {e}")
+            except Exception as e: print(f"[QDRANT SEARCH ERROR] {e}")
         return hits
 
     print(f"[HYBRID] Checking availability for '{params.keyword_search}'...")
     lexical_results, semantic_results = await asyncio.gather(search_lexical(), search_semantic())
     
-    # --- 2. MERGE ---
     combined_results = []
     seen_urls = set()
     for item in lexical_results + semantic_results:
         url = item.get('url')
         if url and url not in seen_urls: combined_results.append(item); seen_urls.add(url)
 
-    # --- 3. SORT & UPDATE SEARCH ID ---
     def parse_date_sort(item):
         d = item.get('publish_date')
         if not d: return datetime.datetime.min
@@ -226,25 +275,17 @@ async def perform_hybrid_search(params, crawlers_map, search_id) -> Tuple[int, s
 
     if combined_results:
         ids = [i.get('article_id') for i in combined_results if i.get('article_id')]
-        asyncio.create_task(update_search_id_for_existing_articles(ids, search_id))
+        await update_search_id_for_existing_articles(ids, search_id)
 
     total_found_in_db = len(combined_results)
-    print(f"[HYBRID] DB has {total_found_in_db} items. Target: {target_end_index}")
+    print(f"[HYBRID] DB has {total_found_in_db} items. Requested Max: {params.max_articles}")
 
-    # --- 4. CHECK LOGIC ---
-    if total_found_in_db >= target_end_index:
+    if total_found_in_db >= params.max_articles:
         return total_found_in_db, "completed", None
     
     else:
-        missing_count = target_end_index - total_found_in_db
-        if total_found_in_db + missing_count > params.max_articles: missing_count = params.max_articles - total_found_in_db
-        if missing_count <= 0: return total_found_in_db, "completed", None
-
-        # Optimize Date
+        missing_count = params.max_articles - total_found_in_db
         new_end_date = params.end_date
-        if combined_results:
-            try: new_end_date = datetime.datetime.fromisoformat(str(combined_results[-1].get('publish_date'))).strftime('%d/%m/%Y')
-            except: pass
         
         try: crawl_params = params.model_copy(update={'max_articles': missing_count, 'end_date': new_end_date})
         except: 
@@ -260,11 +301,7 @@ async def perform_hybrid_search(params, crawlers_map, search_id) -> Tuple[int, s
             history_col = get_history_collection()
             await history_col.update_one(
                 {'search_id': search_id},
-                {'$set': {
-                    'status': 'completed', 
-                    'total_saved': final_total, 
-                    'updated_at': datetime.datetime.now()
-                }}
+                {'$set': {'status': 'completed', 'total_saved': final_total, 'updated_at': datetime.datetime.now()}}
             )
             print(f"[BACKGROUND] Finished. Total: {final_total}")
 
@@ -272,9 +309,53 @@ async def perform_hybrid_search(params, crawlers_map, search_id) -> Tuple[int, s
 
 async def update_search_id_for_existing_articles(article_ids: List[str], new_search_id: str):
     if not article_ids: return
+    
     articles_col = get_articles_collection()
-    try: await articles_col.update_many({'article_id': {'$in': article_ids}}, {'$addToSet': {'search_id': new_search_id}})
-    except Exception: pass
+    qdrant = get_qdrant_client()
+    
+    try: 
+        await articles_col.update_many(
+            {'article_id': {'$in': article_ids}}, 
+            {'$addToSet': {'search_id': new_search_id}}
+        )
+    except Exception as e:
+        print(f"[MONGO UPDATE ERR] {e}")
+
+    if qdrant:
+        try:
+            filter_condition = Filter(
+                must=[FieldCondition(key="article_id", match=MatchAny(any=article_ids))]
+            )
+            
+            points_res = await qdrant.scroll(
+                collection_name=QDRANT_COLLECTION,
+                scroll_filter=filter_condition,
+                limit=1000, 
+                with_payload=True
+            )
+            
+            points, _ = points_res
+            
+            for p in points:
+                current_payload = p.payload
+                current_search_ids = current_payload.get('search_id', [])
+                
+                if isinstance(current_search_ids, str): current_search_ids = [current_search_ids]
+                if not isinstance(current_search_ids, list): current_search_ids = []
+                
+                if new_search_id not in current_search_ids:
+                    current_search_ids.append(new_search_id)
+                    
+                    await qdrant.set_payload(
+                        collection_name=QDRANT_COLLECTION,
+                        payload={'search_id': current_search_ids},
+                        points=[p.id]
+                    )
+            
+            print(f"[QDRANT] Updated search_id for {len(points)} points.")
+            
+        except Exception as e:
+            print(f"[QDRANT UPDATE ERR] {e}")
 
 async def save_and_clean_history(history_col, articles_col, search_id, user_id, s_kw, kw_c, max_art, total_saved, total_matched, time_range, status):
     doc = {

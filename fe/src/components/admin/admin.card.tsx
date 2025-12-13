@@ -40,7 +40,6 @@ const AdminCard = () => {
         fetchStats();
     }, [session]);
 
-    // FIX: Sửa lỗi Spin tip bằng cách tách text ra riêng hoặc dùng cấu trúc lồng nhau
     if (loading) {
         return (
             <div style={{ textAlign: 'center', padding: 40 }}>
@@ -52,7 +51,6 @@ const AdminCard = () => {
     
     if (!stats) return null;
 
-    // FIX: Thay bordered={false} bằng variant="borderless"
     return (
         <Row gutter={[16, 16]}>
             <Col xs={24} sm={12} md={6}>
@@ -72,7 +70,9 @@ const AdminCard = () => {
                         value={stats.topSources[0]?._id || "N/A"}
                         suffix={<span style={{ fontSize: '12px', color: '#8c8c8c' }}>({stats.topSources[0]?.count || 0})</span>}
                         prefix={<GlobalOutlined style={{ color: '#52c41a' }} />}
-                        valueStyle={{ fontSize: '18px' }}
+                        styles={{
+                            content: { fontSize: '18px'}
+                        }}
                     />
                 </Card>
             </Col>

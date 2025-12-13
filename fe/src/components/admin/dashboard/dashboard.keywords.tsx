@@ -1,7 +1,7 @@
 'use client'
 
 import React, { useEffect, useState } from 'react';
-import { Card, List, Tag, Spin, Typography } from 'antd';
+import { Card, Tag, Spin, Typography, Space, Flex } from 'antd';
 import { FireOutlined, SearchOutlined } from '@ant-design/icons';
 import { useSession } from 'next-auth/react';
 import { sendRequest } from '@/utils/api';
@@ -51,31 +51,41 @@ const DashboardKeywords = () => {
             {loading ? (
                 <div style={{ textAlign: 'center', padding: 20 }}><Spin /></div>
             ) : (
-                <List
-                    itemLayout="horizontal"
-                    dataSource={keywords}
-                    renderItem={(item, index) => (
-                        <List.Item>
-                            <List.Item.Meta
-                                avatar={
-                                    <Tag color={index < 3 ? "volcano" : "default"} style={{ marginRight: 0, minWidth: 24, textAlign: 'center' }}>
+                <Space orientation="vertical" style={{ width: '100%' }}>
+                    {keywords.map((item, index) => (
+                        <Card
+                            key={index}
+                            size="small"
+                            styles={{ body: { padding: '12px 8px' } }}
+                        >
+                            <Flex justify="space-between" align="center">
+                                
+                                {/* LEFT PART */}
+                                <Flex align="center" gap={10}>
+                                    <Tag 
+                                        color={index < 3 ? "volcano" : "default"} 
+                                        style={{ marginRight: 0, minWidth: 28, textAlign: 'center' }}
+                                    >
                                         #{index + 1}
                                     </Tag>
-                                }
-                                title={<Text strong>{item.keyword}</Text>}
-                                description={
-                                    <span style={{ fontSize: '12px', color: '#8c8c8c' }}>
-                                        <SearchOutlined style={{ marginRight: 4 }} />
-                                        {dayjs(item.lastSearched).fromNow()}
-                                    </span>
-                                }
-                            />
-                            <div style={{ display: 'flex', alignItems: 'center' }}>
-                                <Tag color="blue" style={{ margin: 0 }}>{item.count} lượt</Tag>
-                            </div>
-                        </List.Item>
-                    )}
-                />
+
+                                    <Space orientation="vertical" size={0}>
+                                        <Text strong>{item.keyword}</Text>
+                                        <span style={{ fontSize: 12, color: '#8c8c8c' }}>
+                                            <SearchOutlined style={{ marginRight: 4 }} />
+                                            {dayjs(item.lastSearched).fromNow()}
+                                        </span>
+                                    </Space>
+                                </Flex>
+
+                                {/* RIGHT PART */}
+                                <Tag color="blue" style={{ margin: 0 }}>
+                                    {item.count} lượt
+                                </Tag>
+                            </Flex>
+                        </Card>
+                    ))}
+                </Space>
             )}
         </Card>
     );

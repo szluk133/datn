@@ -2,13 +2,13 @@
 
 import React from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { List, Breadcrumb, Empty, Pagination, Typography, Button, Badge, Space } from 'antd';
-import { HomeOutlined, StarOutlined, SearchOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Breadcrumb, Empty, Pagination, Typography, Button, Badge, Space, Flex } from 'antd';
+import { HomeOutlined, StarOutlined, SearchOutlined } from '@ant-design/icons';
 import Link from 'next/link';
 import { IArticle } from '@/types/next-auth';
 import ArticleItem from '@/components/client/article/article.item';
 
-const { Title, Text } = Typography;
+const { Title } = Typography;
 
 interface IProps {
     articles: IArticle[];
@@ -59,19 +59,18 @@ const SavedArticleList = (props: IProps) => {
             )}
 
             {articles.length > 0 ? (
-                <>  
-                    <List
-                        itemLayout="vertical"
-                        size="large"
-                        dataSource={articles}
-                        renderItem={(item) => (
-                            <ArticleItem 
-                                key={item.id || item._id} 
-                                article={item} 
+                <>
+                    {/* --- Thay List bằng Flex --- */}
+                    <Flex vertical gap={16}>
+                        {articles.map((item) => (
+                            <ArticleItem
+                                key={item.id || item._id}
+                                article={item}
                                 initialIsSaved={true}
                             />
-                        )}
-                    />
+                        ))}
+                    </Flex>
+
                     <div style={{ textAlign: 'center', marginTop: '24px' }}>
                         <Pagination
                             current={meta.current}
@@ -83,7 +82,7 @@ const SavedArticleList = (props: IProps) => {
                     </div>
                 </>
             ) : (
-                <Empty 
+                <Empty
                     image={Empty.PRESENTED_IMAGE_SIMPLE}
                     description={
                         <span style={{ fontSize: 16, color: '#888' }}>

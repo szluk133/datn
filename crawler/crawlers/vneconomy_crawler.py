@@ -1,4 +1,4 @@
-import requests
+import urllib.parse
 from bs4 import BeautifulSoup
 from typing import List, Dict, Optional, Tuple
 from urllib.parse import urlparse, urljoin
@@ -15,15 +15,27 @@ class VneconomyCrawler(BaseCrawler):
         self.base_url = "https://vneconomy.vn"
 
     async def fetch_search_page(self, keyword: str, page: int, start_date_iso: str, end_date_iso: str) -> Optional[BeautifulSoup]:
-        url = f"{self.base_url}/tim-kiem.html?Text={requests.utils.quote(keyword)}&FromDate={start_date_iso}&ToDate={end_date_iso}&SortBy=newest&page={page}"
         try:
+            s_dt = datetime.datetime.strptime(start_date_iso, '%Y-%m-%d')
+            e_dt = datetime.datetime.strptime(end_date_iso, '%Y-%m-%d')
+            s_date_vn = s_dt.strftime('%d/%m/%Y')
+            e_date_vn = e_dt.strftime('%d/%m/%Y')
+        except:
+            s_date_vn = start_date_iso
+            e_date_vn = end_date_iso
+
+        encoded_keyword = urllib.parse.quote_plus(keyword)
+        url = f"{self.base_url}/tim-kiem.html?Text={encoded_keyword}&FromDate={s_date_vn}&ToDate={e_date_vn}&SortBy=newest&page={page}"
+        
+        try:
+            print(f"[VNECONOMY] Crawling Search: {url}")
             resp = await self.client.get(url)
             if resp.status_code != 200:
-                print(f"[VNECONOMY ERR] Search failed: {resp.status_code}")
+                print(f"[VNECONOMY ERR] Search failed: {resp.status_code} | URL: {url}")
                 return None
             return BeautifulSoup(resp.text, 'html.parser')
         except Exception as e:
-            print(f"[VNECONOMY ERR] Fetch search: {e}")
+            print(f"[VNECONOMY ERR] Fetch search: {type(e).__name__} - {e}")
             return None
 
     async def fetch_category_page(self, category_url: str, page: int) -> Optional[BeautifulSoup]:
@@ -44,44 +56,60 @@ class VneconomyCrawler(BaseCrawler):
 
     def extract_article_links(self, soup: BeautifulSoup, is_search_page: bool = True) -> List[Dict]:
         articles = []
-        seen_links = set() 
-        all_links = soup.select('a[href]')
+        seen_links = set()
         
-        for link_tag in all_links:
+        article_containers = soup.select(
+            '.story-item, .featured-row_item, .featured-column_item, '
+            '.list-new-item, .highlight-item, .story, .grid-new-column_item, '
+            'article.story' 
+        )
+        
+        BLACKLIST_URL_KEYWORDS = [
+            '/video-media.htm', '/tieu-diem.htm', '/dau-tu.htm', 
+            '/chung-khoan.htm', '/tai-chinh.htm', '/tai-chinh-ngan-hang.htm',
+            '/bat-dong-san.htm', '/doanh-nhan.htm', '/the-gioi.htm', 
+            '/cuoc-song-so.htm', '/o-to.htm', '/thi-truong.htm',
+            '/kinh-te-xanh.htm', '/infographics.htm', '/chuyen-dong-xanh.htm',
+            '/dien-dan-kinh-te-xanh.htm', '/thuong-hieu-xanh.htm',
+            '/phap-ly-kinh-te-xanh.htm', '/thi-truong-von-tai-chinh.htm',
+            '/timeline/'
+        ]
+
+        for container in article_containers:
             try:
+                link_tag = container.select_one('a.story__title, a.cms-link, .featured-row_item__title a, h3 a, h4 a')
+                
+                if not link_tag:
+                    link_tag = container.find('a', href=True)
+                
+                if not link_tag: continue
+
                 href = link_tag.get('href')
-                if not href or '.htm' not in href or 'video' in href or len(href) < 15:
-                    continue
+                if not href or len(href) < 15: continue
                 
+                if '.htm' not in href or 'video' in href: continue
+                
+                slug = href.split('/')[-1].replace('.htm', '')
+                if slug.count('-') < 3: 
+                    continue
+
+                if any(k in href for k in BLACKLIST_URL_KEYWORDS): continue
+
                 full_url = urljoin(self.base_url, href)
-                
-                if full_url in seen_links:
-                    continue
+                if full_url in seen_links: continue
 
                 title = link_tag.get('title') or link_tag.text.strip()
-                
                 if not title:
-                    parent_container = link_tag.find_parent(class_=['featured-row_item', 'story-item', 'highlight-item', 'grid-new-column_item'])
-                    if parent_container:
-                        title_tag = parent_container.select_one('h3, h4, .featured-row_item__title h3, .story__title')
-                        if title_tag:
-                            title = title_tag.get('title') or title_tag.text.strip()
-
-                if not title or len(title) < 5: 
-                    continue
+                    title_elem = container.select_one('h3, h4, .story__title')
+                    if title_elem:
+                        title = title_elem.get('title') or title_elem.text.strip()
+                
+                if not title or len(title) < 15: continue
 
                 pub_date = None
-                parent_classes = [
-                    'featured-row_item', 'featured-column_item', 
-                    'story-item', 'list-new-item', 'highlight-item', 'story',
-                    'grid-new-column_item'
-                ]
-                
-                parent = link_tag.find_parent(class_=parent_classes)
-                if parent:
-                    date_tag = parent.select_one('.story__time, .time, .date, .meta-time, .featured-row_item__meta')
-                    if date_tag:
-                        pub_date = parse_vietnamese_date(date_tag.text.strip())
+                date_tag = container.select_one('.story__time, .time, .date, .meta-time, .featured-row_item__meta')
+                if date_tag:
+                    pub_date = parse_vietnamese_date(date_tag.text.strip())
 
                 articles.append({
                     'url': full_url, 
@@ -101,12 +129,13 @@ class VneconomyCrawler(BaseCrawler):
             if resp.status_code != 200: return None
             
             soup = BeautifulSoup(resp.text, 'html.parser')
+            
+            if len(soup.select('.story-item')) > 5 and not soup.select_one('.detail-content'):
+                return None
 
-            # 1. Sapo
             sapo = soup.select_one('.news-sapo, .sapo, .detail-sapo')
             sapo_text = sapo.text.strip() if sapo else ""
             
-            # 2. Content
             body = soup.select_one('div[data-field="body"]') or \
                 soup.select_one('.detail-content') or \
                 soup.select_one('.content-detail') or \
@@ -120,7 +149,6 @@ class VneconomyCrawler(BaseCrawler):
             else:
                 content_text = ""
 
-            # Fallback
             if not content_text: 
                 main_tag = soup.select_one('main') or soup.select_one('body')
                 if main_tag:
@@ -128,15 +156,13 @@ class VneconomyCrawler(BaseCrawler):
                     content_text = "\n".join([p.text.strip() for p in ps if len(p.text.strip()) > 20])
                     if len(content_text) > 5000: content_text = content_text[:5000]
 
-            if not content_text: 
-                return None
+            if not content_text: return None
 
             content_text = "\n".join([line.strip() for line in content_text.splitlines() if line.strip()])
 
             if content_keyword and content_keyword.lower() not in content_text.lower(): 
                 return None
 
-            # 3. Date
             date_tag = soup.select_one('.detail-time, .date-detail .date, .msg-time')
             if date_tag:
                 pub_date = parse_vietnamese_date(date_tag.text.strip())
@@ -145,7 +171,6 @@ class VneconomyCrawler(BaseCrawler):
             if not article_data.get('publish_date'):
                 article_data['publish_date'] = datetime.datetime.now()
 
-            # 4. Categories
             cats = []
             breadcrumbs = soup.select('.breadcrumb-topbar a.text-breadcrumb')
             for b in breadcrumbs:
@@ -157,22 +182,18 @@ class VneconomyCrawler(BaseCrawler):
                 header_sec = soup.select_one('.layout-header-section-page')
                 if header_sec:
                     main_cat = header_sec.select_one('.title-header-section-dt .title, h1.title')
-                    if main_cat:
-                        cats.append(main_cat.text.strip())
+                    if main_cat: cats.append(main_cat.text.strip())
                     sub_cats = header_sec.select('a.text-header-dt')
                     for sc in sub_cats:
                         txt = sc.text.strip()
-                        if txt and txt not in cats:
-                            cats.append(txt)
+                        if txt and txt not in cats: cats.append(txt)
             
             if not cats:
                 breadcrumb_links = soup.select('.breadcrumb li a, .breadcrumb-item a, ul.breadcrumb a')
                 for a in breadcrumb_links:
                     txt = a.text.strip()
-                    if txt and "Trang chủ" not in txt and txt not in cats:
-                        cats.append(txt)
+                    if txt and "Trang chủ" not in txt and txt not in cats: cats.append(txt)
 
-            # 5. Tags
             tags = []
             scripts = soup.find_all('script')
             for script in scripts:

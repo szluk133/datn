@@ -40,12 +40,12 @@ crawler/__pycache__/
 crawler/logs/
 crawler/crawl/
 crawler/config.py
-crawler/del_meli.py
-crawler/del_qdrant.py
-crawler/migrate_and_reset.py
-crawler/update_meilisearch_data.py
-crawler/update_qdrant_data.py
-crawler/update_search_id_array.py
+crawler/test/del_meli.py
+crawler/test/del_qdrant.py
+crawler/test/migrate_and_reset.py
+crawler/test/update_meilisearch_data.py
+crawler/test/update_qdrant_data.py
+crawler/test/update_search_id_array.py
 
 chatbot/__pycache__/
 chatbot/logs/

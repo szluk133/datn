@@ -1,22 +1,24 @@
-import { IsString, IsInt, IsNotEmpty, IsArray } from 'class-validator';
+import { IsString, IsInt, IsNotEmpty, IsArray, IsOptional } from 'class-validator';
 import { Type } from 'class-transformer';
 
 export class CrawlRequestDto {
     @IsArray()
     @IsString({ each: true })
-    websites: string[];
+    @IsOptional()
+    websites?: string[];
 
     @IsString()
     @IsNotEmpty()
     keyword_search: string;
 
     @IsString()
-    @IsNotEmpty()
-    keyword_content: string;
+    @IsOptional()
+    keyword_content?: string;
 
     @Type(() => Number)
     @IsInt()
-    max_articles: number;
+    @IsOptional()
+    max_articles?: number;
 
     @IsString()
     @IsNotEmpty()
@@ -29,6 +31,13 @@ export class CrawlRequestDto {
     @IsString()
     @IsNotEmpty()
     user_id: string;
+}
+
+export class CrawlTriggerResponseDto {
+    status: string;
+    search_id: string;
+    stream_url: string;
+    meta: any;
 }
 
 export class ArticleResponseDto {

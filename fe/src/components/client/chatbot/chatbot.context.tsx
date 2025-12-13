@@ -12,6 +12,9 @@ type PageContextType = {
     current_page: 'home_page' | 'list_page' | 'detail_page';
     search_id?: string;
     article_id?: string;
+    // Bổ sung tham số sắp xếp cho List Page
+    sort_by?: string;
+    sort_order?: 'asc' | 'desc';
 };
 
 // Luồng A: Bối cảnh của truy vấn (Query Context) - văn bản được bôi đen

@@ -1,12 +1,21 @@
 import { IsNotEmpty, IsString, IsOptional, IsMongoId, ValidateNested, IsEnum } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// --- Enums & Sub-DTOs ---
 
 export enum PageContext {
     HOME_PAGE = 'home_page',
     LIST_PAGE = 'list_page',
     DETAIL_PAGE = 'detail_page',
+}
+
+export enum SortBy {
+    PUBLISH_DATE = 'publish_date',
+    SENTIMENT = 'sentiment'
+}
+
+export enum SortOrder {
+    ASC = 'asc',
+    DESC = 'desc'
 }
 
 export class ContextDto {
@@ -21,6 +30,14 @@ export class ContextDto {
     @IsOptional()
     @IsString()
     article_id?: string;
+
+    @IsOptional()
+    @IsString()
+    sort_by?: string;
+
+    @IsOptional()
+    @IsEnum(SortOrder)
+    sort_order?: string;
 }
 
 export class SourceDto {
@@ -34,8 +51,6 @@ export class SourceDto {
     @IsString()
     url?: string;
 }
-
-// --- Main DTOs ---
 
 export class CreateConversationDto {
     @IsString()
@@ -54,7 +69,7 @@ export class ChatRequestDto {
 
     @IsString()
     @IsNotEmpty()
-    query: string; // Đổi từ 'question' sang 'query' theo tài liệu mới
+    query: string;
 
     @IsNotEmpty()
     @ValidateNested()

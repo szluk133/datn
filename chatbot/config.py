@@ -6,7 +6,7 @@ load_dotenv()
 
 class Settings(BaseSettings):
 
-    google_api_key: str = os.getenv("GOOGLE_API_KEY", "AIzaSyDtAEYsrEH6C9QhcFbTmNxLDAuqT0UaukM")
+    google_api_key: str = os.getenv("GOOGLE_API_KEY", "AIzaSyCTUBetmElBTSl0DcLPbFCZNeFvTVcfoXM")
 
     mongodb_uri: str = os.getenv("MONGODB_URI", "mongodb+srv://szluk133:sncuong2003@cluster0.nmr1jhv.mongodb.net/")
     mongodb_db_name: str = os.getenv("MONGODB_DB_NAME", "test")
