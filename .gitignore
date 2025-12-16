@@ -39,7 +39,6 @@ be/node_modules/
 crawler/__pycache__/
 crawler/logs/
 crawler/crawl/
-crawler/config.py
 crawler/test/del_meli.py
 crawler/test/del_qdrant.py
 crawler/test/migrate_and_reset.py
