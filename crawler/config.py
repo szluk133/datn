@@ -1,20 +1,21 @@
+from dotenv import load_dotenv
 import os
-
+load_dotenv()
 # Database
-MONGO_URI = os.environ.get("MONGO_URI", "mongodb+srv://szluk133:sncuong2003@cluster0.nmr1jhv.mongodb.net/")
-DATABASE_NAME = "test"
-COLLECTION_NAME = "articles"
-HISTORY_COLLECTION_NAME = "search_history"
-SCHEDULED_JOBS_COLLECTION = "scheduled_jobs"
-TOPICS_COLLECTION_NAME = "topics"
+MONGO_URI = os.getenv("MONGO_URI")
+DATABASE_NAME = os.getenv("DATABASE_NAME")
+COLLECTION_NAME = os.getenv("COLLECTION_NAME")
+HISTORY_COLLECTION_NAME = os.getenv("HISTORY_COLLECTION_NAME")
+SCHEDULED_JOBS_COLLECTION = os.getenv("SCHEDULED_JOBS_COLLECTION")
+TOPICS_COLLECTION_NAME = os.getenv("TOPICS_COLLECTION_NAME")
 
 # Vector DBs
-QDRANT_URL = os.environ.get("QDRANT_URL", "https://c9a9a8ac-8ff4-4614-873b-e5c3428a0fb6.eu-west-2-0.aws.cloud.qdrant.io")
-QDRANT_API_KEY = os.environ.get("QDRANT_API_KEY", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhY2Nlc3MiOiJtIn0.WmogjAtxB_OvIMfRVLIyQ_yzUZANoUKpDhOF7Zx00YA")
-QDRANT_COLLECTION = "datn"
+QDRANT_URL = os.getenv("QDRANT_URL")
+QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
+QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION")
 
-MEILISEARCH_URL = os.environ.get("MEILISEARCH_URL", "http://localhost:7700")
-MEILISEARCH_KEY = os.environ.get("MEILISEARCH_KEY", "e_zh2SKU2P-K9eElhZHwc2VKhrr3YxZOQBdn6JahUow")
+MEILISEARCH_URL = os.getenv("MEILISEARCH_URL")
+MEILISEARCH_KEY = os.getenv("MEILISEARCH_KEY")
 
 # Embedding Model (Dùng chung cho cả Vector Search và Tóm tắt Extractive)
 EMBEDDING_MODEL_NAME = "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
