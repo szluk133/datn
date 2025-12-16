@@ -5,4 +5,5 @@ export class SearchHistoryResponseDto {
     keyword_content: string;
     time_range: string;
     websites_crawled: string[];
+    status: string;
 }

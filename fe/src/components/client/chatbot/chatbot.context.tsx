@@ -5,19 +5,16 @@ import { useSession } from 'next-auth/react';
 import { sendRequest } from '@/utils/api';
 import { IConversation, IChatMessage, SourceDto } from '@/types/next-auth';
 
-// Các trạng thái hiển thị của Chatbot
 type ChatbotView = 'icon' | 'window' | 'full';
 
 type PageContextType = {
     current_page: 'home_page' | 'list_page' | 'detail_page';
     search_id?: string;
     article_id?: string;
-    // Bổ sung tham số sắp xếp cho List Page
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
 };
 
-// Luồng A: Bối cảnh của truy vấn (Query Context) - văn bản được bôi đen
 type QueryContextType = {
     context_text?: string;
 };
@@ -66,7 +63,6 @@ export const ChatContextProvider: React.FC<{ children: ReactNode }> = ({ childre
     const [pageContext, setPageContext] = useState<PageContextType | null>(null);
     const [queryContext, setQueryContext] = useState<QueryContextType | null>(null);
 
-    // B. Lấy danh sách lịch sử chat
     const loadConversations = async () => {
         if (!session?.user?._id) return;
         setIsLoadingApi(true);
@@ -85,7 +81,6 @@ export const ChatContextProvider: React.FC<{ children: ReactNode }> = ({ childre
         setIsLoadingApi(false);
     };
 
-    // C. Lấy chi tiết tin nhắn cũ
     const loadMessages = async (conversationId: string) => {
         if (!session) return;
         setIsLoadingApi(true);
@@ -107,7 +102,6 @@ export const ChatContextProvider: React.FC<{ children: ReactNode }> = ({ childre
         setIsLoadingApi(false);
     };
 
-    // D. Gửi tin nhắn (API Chính)
     const sendMessage = async (query: string, contextOverride?: QueryContextType) => {
         if (!session?.user?._id) return;
         setIsLoadingApi(true);
@@ -152,7 +146,6 @@ export const ChatContextProvider: React.FC<{ children: ReactNode }> = ({ childre
             if (res.data) {
                 const { answer, sources, conversation_id } = res.data;
 
-                // Cập nhật câu trả lời
                 setMessages(prev => 
                     prev.map(msg => 
                         msg._id === userMessage._id 
@@ -166,13 +159,11 @@ export const ChatContextProvider: React.FC<{ children: ReactNode }> = ({ childre
                     )
                 );
 
-                // Cập nhật conversation_id nếu là đoạn chat mới
                 if (!currentConversationId && conversation_id) {
                     setCurrentConversationId(conversation_id);
-                    loadConversations(); // Reload sidebar
+                    loadConversations();
                 }
 
-                // Reset query context sau khi hỏi xong
                 if (contextOverride) {
                     setQueryContext(null);
                 }

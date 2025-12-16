@@ -1,16 +1,17 @@
 'use client';
 
 import React, { useState, useRef, MouseEvent, useEffect } from 'react';
-import { Button, Typography, Modal, Input, Alert, Tag, Space, Divider } from 'antd';
+import { Button, Typography, Modal, Input, Alert, Tag, Space, Divider, Flex, theme, Tooltip, Card } from 'antd';
 import { 
     CommentOutlined, 
     RobotOutlined, 
     TagsOutlined, 
     CalendarOutlined, 
     GlobalOutlined, 
-    SmileOutlined, 
-    MehOutlined, 
-    FrownOutlined 
+    SmileFilled, 
+    MehFilled, 
+    FrownFilled,
+    LinkOutlined
 } from '@ant-design/icons';
 import { useChatbot } from '@/components/client/chatbot/chatbot.context';
 import BookmarkButton from './bookmark.btn';
@@ -41,6 +42,7 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
     site_categories,
     url
 }) => {
+    const { token } = theme.useToken();
     const { sendMessage, setView, setPageContext } = useChatbot();
     
     useEffect(() => {
@@ -50,10 +52,7 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
                 article_id: articleId
             });
         }
-        
-        return () => {
-            setPageContext(null);
-        };
+        return () => setPageContext(null);
     }, [articleId, setPageContext]);
 
     const [selection, setSelection] = useState<{ x: number, y: number, text: string } | null>(null);
@@ -64,29 +63,34 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
 
     const getSentimentInfo = (score: number | null | undefined) => {
         if (score === undefined || score === null || isNaN(score)) {
-            return { color: 'default', icon: <MehOutlined />, label: 'N/A' };
+            return { color: token.colorTextDescription, icon: <MehFilled />, label: 'Chưa phân tích', bg: token.colorFillQuaternary };
         }
-        if (score >= 0.5) return { color: 'success', icon: <SmileOutlined />, label: 'Tích cực' };
-        if (score > 0) return { color: 'processing', icon: <SmileOutlined />, label: 'Khá tốt' };
-        if (score === 0) return { color: 'warning', icon: <MehOutlined />, label: 'Trung tính' };
-        if (score > -0.5) return { color: 'error', icon: <FrownOutlined />, label: 'Tiêu cực' };
-        return { color: '#cf1322', icon: <FrownOutlined />, label: 'Rất tiêu cực' };
+        if (score >= 0.5) return { color: token.colorSuccess, icon: <SmileFilled />, label: 'Tích cực', bg: token.colorSuccessBg };
+        if (score > 0) return { color: token.colorWarning, icon: <SmileFilled />, label: 'Khá tốt', bg: token.colorWarningBg };
+        if (score === 0) return { color: token.colorWarning, icon: <MehFilled />, label: 'Trung tính', bg: token.colorWarningBg };
+        if (score > -0.5) return { color: token.colorError, icon: <FrownFilled />, label: 'Tiêu cực', bg: token.colorErrorBg };
+        return { color: token.colorErrorActive, icon: <FrownFilled />, label: 'Rất tiêu cực', bg: token.colorErrorBg };
     };
 
     const sentiment = getSentimentInfo(ai_sentiment_score);
 
     const handleMouseUp = (e: MouseEvent<HTMLDivElement>) => {
         if (isModalVisible) return;
-        const selection = window.getSelection();
-        const selectedText = selection?.toString().trim() || '';
-        if (selectedText.length > 20) {
+        const selectionObj = window.getSelection();
+        const selectedText = selectionObj?.toString().trim() || '';
+        if (selectedText.length > 10) {
             if (contentRef.current) {
+                const range = selectionObj?.getRangeAt(0);
+                const rect = range?.getBoundingClientRect();
                 const containerRect = contentRef.current.getBoundingClientRect();
-                setSelection({
-                    x: e.clientX - containerRect.left + 10,
-                    y: e.clientY - containerRect.top + window.scrollY + 10,
-                    text: selectedText,
-                });
+                
+                if (rect) {
+                    setSelection({
+                        x: rect.left + (rect.width / 2) - containerRect.left,
+                        y: rect.top - containerRect.top,
+                        text: selectedText,
+                    });
+                }
             }
         } else {
             setSelection(null);
@@ -114,125 +118,182 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
     };
 
     return (
-        <div className="article-body-container" style={{ maxWidth: '900px', margin: '0 auto', padding: '20px' }}>
+        <div style={{ position: 'relative' }}>
             
-            {/* DÒNG 1: TITLE & ACTION */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16 }}>
-                <Title level={2} style={{ marginBottom: '16px', flex: 1 }}>
-                    {title}
-                </Title>
-                {/* Nút Bookmark ở đây */}
-                <div style={{ marginTop: 8 }}>
+            <Flex vertical gap={16} style={{ marginBottom: 24 }}>
+                <Flex justify="space-between" align="start" gap={16}>
+                    <Title level={1} style={{ margin: 0, fontSize: '28px', lineHeight: 1.3, color: token.colorTextHeading }}>
+                        {title}
+                    </Title>
                     <BookmarkButton 
                         articleId={articleId} 
                         articleTitle={title} 
                         articleUrl={url} 
                         size="large"
+                        shape="circle"
+                        type="default"
                     />
-                </div>
-            </div>
+                </Flex>
 
-            {/* DÒNG 2: METADATA */}
-            <div style={{ marginBottom: '24px', display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
-                <Text type="secondary" style={{ display: 'flex', alignItems: 'center' }}>
-                    <CalendarOutlined style={{ marginRight: '6px' }} />
-                    {new Date(publish_date).toLocaleDateString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                </Text>
-                <Divider orientation="vertical" />
-                <Tag color="blue" style={{ display: 'flex', alignItems: 'center' }}>
-                    <GlobalOutlined style={{ marginRight: '4px' }} /> {website}
-                </Tag>
-                <Tag color={sentiment.color} style={{ display: 'flex', alignItems: 'center' }}>
-                    {sentiment.icon} <span style={{ marginLeft: '4px' }}>{sentiment.label} {ai_sentiment_score !== undefined ? `(${ai_sentiment_score})` : ''}</span>
-                </Tag>
+                <Flex wrap="wrap" gap={12} align="center" style={{ color: token.colorTextSecondary }}>
+                    <Text type="secondary">
+                        <CalendarOutlined style={{ marginRight: 6 }} />
+                        {new Date(publish_date).toLocaleDateString('vi-VN', { year: 'numeric', month: 'long', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                    </Text>
+                    
+                    <span style={{ borderLeft: '1px solid #d9d9d9', height: '1em', margin: '0 8px' }} />
+                    
+                    <Tag color="geekblue" style={{ margin: 0, border: 'none' }}>
+                        <GlobalOutlined style={{ marginRight: 4 }} /> {website}
+                    </Tag>
+
+                    <Tag 
+                        style={{ 
+                            margin: 0, 
+                            border: 'none', 
+                            backgroundColor: sentiment.bg, 
+                            color: sentiment.color,
+                            fontWeight: 500
+                        }}
+                    >
+                        {sentiment.icon} <span style={{ marginLeft: 4 }}>{sentiment.label} {ai_sentiment_score !== undefined ? `(${ai_sentiment_score})` : ''}</span>
+                    </Tag>
+                </Flex>
+
                 {site_categories && site_categories.length > 0 && (
-                    <>
-                        <Divider type="vertical" />
-                        <Space size={4} wrap>
-                            <TagsOutlined style={{ color: '#595959' }} />
-                            {site_categories.map((cat, index) => (
-                                <Tag key={index} color="cyan">{cat}</Tag>
-                            ))}
-                        </Space>
-                    </>
+                    <Flex gap={8} wrap="wrap">
+                        {site_categories.map((cat, index) => (
+                            <Tag key={index} style={{ margin: 0, color: token.colorTextSecondary, background: token.colorFillQuaternary, border: 'none' }}>
+                                <TagsOutlined style={{ marginRight: 4 }} /> {cat}
+                            </Tag>
+                        ))}
+                    </Flex>
                 )}
-            </div>
+            </Flex>
 
-            {/* DÒNG 3: AI SUMMARY */}
             {ai_summary && ai_summary.length > 0 && (
-                <div style={{ marginBottom: '32px' }}>
-                    <Alert
-                        message={
-                            <Space align="center">
-                                <RobotOutlined style={{ fontSize: '20px', color: '#1890ff' }} />
-                                <Text strong style={{ fontSize: '16px' }}>Tóm tắt chi tiết</Text>
-                            </Space>
-                        }
-                        description={
-                            <ul style={{ margin: '12px 0 0 20px', padding: 0 }}>
+                <Card 
+                    variant="borderless" 
+                    style={{ 
+                        backgroundColor: '#f0f5ff', 
+                        borderLeft: `4px solid ${token.colorPrimary}`,
+                        marginBottom: 32,
+                        borderRadius: token.borderRadiusLG 
+                    }}
+                    styles={{ body: { padding: '20px 24px' } }}
+                >
+                    <Flex gap={12} align="start">
+                        <RobotOutlined style={{ fontSize: '24px', color: token.colorPrimary, marginTop: 4 }} />
+                        <div>
+                            <Text strong style={{ fontSize: '16px', color: token.colorPrimaryText, display: 'block', marginBottom: 8 }}>
+                                Tóm tắt thông minh
+                            </Text>
+                            <ul style={{ margin: 0, paddingLeft: 20, color: token.colorText }}>
                                 {ai_summary.map((point, index) => (
-                                    <li key={index} style={{ marginBottom: '6px', fontSize: '15px', lineHeight: '1.6', textAlign: 'justify' }}>
-                                        {point}
-                                    </li>
+                                    <li key={index} style={{ marginBottom: 6, lineHeight: 1.6 }}>{point}</li>
                                 ))}
                             </ul>
-                        }
-                        type="info"
-                        showIcon={false}
-                        style={{ border: '1px solid #91caff', backgroundColor: '#e6f7ff', borderRadius: '8px' }}
-                    />
-                </div>
+                        </div>
+                    </Flex>
+                </Card>
             )}
 
-            {/* DÒNG 4: NỘI DUNG CHI TIẾT */}
-            <div ref={contentRef} onMouseUp={handleMouseUp} style={{ position: 'relative' }}>
+            <div ref={contentRef} onMouseUp={handleMouseUp} style={{ position: 'relative', minHeight: '200px' }}>
+                
                 {selection && !isModalVisible && (
-                    <Button
-                        type="primary"
-                        icon={<CommentOutlined />}
+                    <div
                         style={{
                             position: 'absolute',
-                            left: `${selection.x}px`,
-                            top: `${selection.y}px`,
+                            left: selection.x,
+                            top: selection.y - 45,
                             zIndex: 100,
-                            boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                            transform: 'translateX(-50%)',
                         }}
-                        onClick={handleOpenAskModal}
                     >
-                        Hỏi Chatbot về đoạn này
-                    </Button>
+                        <Tooltip title="Hỏi AI về đoạn này" open={true}>
+                            <Button
+                                type="primary"
+                                shape="round"
+                                icon={<CommentOutlined />}
+                                size="middle"
+                                onClick={handleOpenAskModal}
+                                style={{ boxShadow: token.boxShadowSecondary }}
+                            >
+                                Hỏi Chatbot
+                            </Button>
+                        </Tooltip>
+                        <div style={{ 
+                            width: 0, height: 0, 
+                            borderLeft: '6px solid transparent', 
+                            borderRight: '6px solid transparent', 
+                            borderTop: `6px solid ${token.colorPrimary}`, 
+                            margin: '0 auto' 
+                        }} />
+                    </div>
                 )}
 
-                <Modal
-                    title="Hỏi về đoạn văn bản đã chọn"
-                    open={isModalVisible}
-                    onOk={handleSendFromModal}
-                    onCancel={handleCancelModal}
-                    okText="Gửi câu hỏi"
-                    cancelText="Hủy"
-                    okButtonProps={{ disabled: !question.trim() }}
-                >
-                    <Typography.Text strong>Văn bản đã chọn:</Typography.Text>
-                    <Paragraph
-                        ellipsis={{ rows: 4, expandable: true, symbol: 'xem thêm' }}
-                        style={{ background: '#f5f5f5', padding: '8px', borderRadius: '4px', maxHeight: '150px', overflowY: 'auto', whiteSpace: 'pre-wrap' }}
-                    >
-                        {selection?.text}
-                    </Paragraph>
-                    <Typography.Text strong>Câu hỏi của bạn:</Typography.Text>
-                    <TextArea
-                        value={question}
-                        onChange={(e) => setQuestion(e.target.value)}
-                        placeholder="Bạn muốn hỏi gì về đoạn văn bản này?"
-                        rows={3}
-                        style={{ marginTop: '8px' }}
-                    />
-                </Modal>
-
-                <Paragraph style={{ whiteSpace: 'pre-wrap', fontSize: '17px', lineHeight: '1.8', color: '#262626' }}>
-                    {content}
-                </Paragraph>
+                <Typography style={{ 
+                    fontSize: '18px', 
+                    lineHeight: '1.8', 
+                    color: '#262626', 
+                    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'" 
+                    }}>
+                    {content.split('\n').map((paragraph, idx) => (
+                        paragraph.trim() ? (
+                            <p key={idx} style={{ marginBottom: '1.5em' }}>{paragraph}</p>
+                        ) : null
+                    ))}
+                </Typography>
             </div>
+
+            <Divider style={{ margin: '40px 0 24px 0' }} />
+            <Flex justify="center">
+                <Button 
+                    type="dashed" 
+                    href={url} 
+                    target="_blank" 
+                    icon={<LinkOutlined />}
+                    size="large"
+                >
+                    Đọc bài viết gốc tại {website}
+                </Button>
+            </Flex>
+
+            <Modal
+                title={<Space><RobotOutlined style={{ color: token.colorPrimary }} /> Hỏi đáp ngữ cảnh</Space>}
+                open={isModalVisible}
+                onOk={handleSendFromModal}
+                onCancel={handleCancelModal}
+                okText="Gửi câu hỏi"
+                cancelText="Hủy"
+                okButtonProps={{ disabled: !question.trim() }}
+                centered
+            >
+                <div style={{ marginBottom: 16 }}>
+                    <Text type="secondary" style={{ fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>Ngữ cảnh đã chọn:</Text>
+                    <div style={{ 
+                        marginTop: 8, 
+                        padding: 12, 
+                        background: token.colorFillQuaternary, 
+                        borderRadius: token.borderRadius,
+                        borderLeft: `3px solid ${token.colorInfo}`,
+                        maxHeight: 120,
+                        overflowY: 'auto',
+                        fontStyle: 'italic'
+                    }}>
+                        <Text style={{ color: token.colorTextSecondary }}>"{selection?.text}"</Text>
+                    </div>
+                </div>
+                
+                <TextArea
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    placeholder="Ví dụ: Giải thích thuật ngữ này? Tóm tắt đoạn này?..."
+                    rows={4}
+                    autoFocus
+                    variant="filled"
+                />
+            </Modal>
         </div>
     );
 };

@@ -23,13 +23,11 @@ class LocalAIService:
             print(f"[AI-LOCAL] Đang tải model Sentiment '{SENTIMENT_MODEL_NAME}'...")
             t0 = time.time()
             try:
-                # Load & Quantize
                 self._tokenizer = AutoTokenizer.from_pretrained(SENTIMENT_MODEL_NAME)
                 model = AutoModelForSequenceClassification.from_pretrained(SENTIMENT_MODEL_NAME)
                 quantized_model = torch.quantization.quantize_dynamic(
                     model, {torch.nn.Linear}, dtype=torch.qint8
                 )
-                # top_k=None để lấy tất cả label (POS, NEG, NEU) và score
                 self._sentiment_pipeline = pipeline(
                     "sentiment-analysis", 
                     model=quantized_model, 
@@ -54,14 +52,10 @@ class LocalAIService:
 
         t_start = time.time()
         
-        # --- 1. PHÂN TÍCH CẢM XÚC ---
         sentiment_score = 0.0
         try:
             text_for_sentiment = content[:1000] 
 
-            # Kết quả trả về với top_k=None thường là: 
-            # [[{'label': 'POS', 'score': 0.9}, {'label': 'NEG', 'score': 0.1}, ...]] (List lồng List)
-            # Hoặc [{'label': 'POS', 'score': 0.9}, ...] (List phẳng - tùy phiên bản)
             result = await asyncio.to_thread(
                 self._sentiment_pipeline, 
                 text_for_sentiment, 
@@ -71,21 +65,15 @@ class LocalAIService:
             
             if result:
                 scores_list = []
-                # [FIX] Xử lý linh hoạt các kiểu trả về của pipeline
                 if isinstance(result, list):
                     if len(result) > 0:
                         first_item = result[0]
                         if isinstance(first_item, list):
-                            # Trường hợp [[{'label':...}, ...]] -> Lấy list bên trong
                             scores_list = first_item
                         elif isinstance(first_item, dict):
-                            # Trường hợp [{'label':...}, ...] -> Lấy chính nó
                             scores_list = result
-                        # Các trường hợp khác (vd empty list) sẽ bỏ qua
                 
                 if scores_list and isinstance(scores_list, list) and len(scores_list) > 0 and isinstance(scores_list[0], dict):
-                    # Tìm label có điểm cao nhất
-                    # scores_list ví dụ: [{'label': 'POS', 'score': 0.9}, {'label': 'NEG', 'score': 0.1}]
                     sorted_scores = sorted(scores_list, key=lambda x: x.get('score', 0.0), reverse=True)
                     top_result = sorted_scores[0]
                     
@@ -96,8 +84,7 @@ class LocalAIService:
                     elif label == 'NEG': sentiment_score = -confidence
                     else: sentiment_score = 0.0
                 else:
-                    # Fallback nếu cấu trúc không như mong đợi
-                    pass # sentiment_score vẫn là 0.0
+                    pass
 
         except Exception as e:
             print(f"[AI ERROR] Sentiment failed: {e}")
@@ -105,40 +92,26 @@ class LocalAIService:
 
         t_sent = time.time()
 
-        # --- 2. TÓM TẮT (Extractive Vector Similarity - Centroid) ---
         summary_sentences = []
         try:
-            # A. Tách câu
             sentences = re.split(r'(?<=[.!?])\s+', content)
-            # Lọc câu ngắn & Giới hạn 40 câu đầu để đảm bảo tốc độ
             valid_sentences = [s.strip() for s in sentences if len(s.strip()) > 25][:40]
             
             if len(valid_sentences) <= 3:
                 summary_sentences = valid_sentences
             else:
                 embed_service = get_embedding_service()
-                
-                # B. Tạo Vector cho các câu (Batch Processing)
                 vectors = await embed_service.get_embeddings_async(valid_sentences)
-                
                 if vectors and len(vectors) > 0:
                     mat = np.array(vectors)
-                    
-                    # C. Tạo Vector đại diện cho cả bài (Trung bình cộng các vector câu)
                     doc_embedding = np.mean(mat, axis=0).reshape(1, -1)
                     
-                    # D. Tính độ tương đồng (Cosine Similarity)
                     sims = cosine_similarity(mat, doc_embedding).flatten()
-                    
-                    # E. Chọn 3 câu có điểm cao nhất
                     top_idx = sims.argsort()[-3:][::-1]
-                    
-                    # Sắp xếp lại theo thứ tự xuất hiện trong bài
                     top_idx = sorted(top_idx)
-                    
                     summary_sentences = [valid_sentences[i] for i in top_idx]
                 else:
-                    summary_sentences = valid_sentences[:3] # Fallback
+                    summary_sentences = valid_sentences[:3]
 
         except Exception as e:
             print(f"[AI ERROR] Summary: {e}")
@@ -146,7 +119,6 @@ class LocalAIService:
 
         t_end = time.time()
         
-        # [LOG PERFORMANCE]
         print(f"[PERF] Sent: {t_sent-t_start:.2f}s | Summ: {t_end-t_sent:.2f}s | Total: {t_end-t_start:.2f}s")
 
         return {

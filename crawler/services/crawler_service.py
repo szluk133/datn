@@ -273,12 +273,15 @@ async def perform_hybrid_search(params, crawlers_map, search_id) -> Tuple[int, s
         except: return datetime.datetime.min
     combined_results.sort(key=parse_date_sort, reverse=True)
 
+    if len(combined_results) > params.max_articles:
+        combined_results = combined_results[:params.max_articles]
+
     if combined_results:
         ids = [i.get('article_id') for i in combined_results if i.get('article_id')]
         await update_search_id_for_existing_articles(ids, search_id)
 
     total_found_in_db = len(combined_results)
-    print(f"[HYBRID] DB has {total_found_in_db} items. Requested Max: {params.max_articles}")
+    print(f"[HYBRID] DB has {total_found_in_db} items (Strict Limit). Requested Max: {params.max_articles}")
 
     if total_found_in_db >= params.max_articles:
         return total_found_in_db, "completed", None

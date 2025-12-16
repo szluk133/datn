@@ -46,9 +46,9 @@ crawler/test/migrate_and_reset.py
 crawler/test/update_meilisearch_data.py
 crawler/test/update_qdrant_data.py
 crawler/test/update_search_id_array.py
+crawler/test/clean_empty_summary.py
 
 chatbot/__pycache__/
 chatbot/logs/
 chatbot/chat/
 chatbot/sync_service.py
-chatbot/config.py

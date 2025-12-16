@@ -6,9 +6,8 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useState } from "react";
 import UserCreate from "./user.create";
 import UserUpdate from "./user.update";
-import { IUser } from "@/types/next-auth"; // Import IUser
+import { IUser } from "@/types/next-auth";
 
-// Định nghĩa lại kiểu cho meta để tái sử dụng
 interface IMeta {
     current: number;
     pageSize: number;
@@ -17,11 +16,10 @@ interface IMeta {
 }
 
 interface IProps {
-    users: IUser[]; // Sử dụng kiểu IUser cụ thể thay vì any
-    meta?: IMeta; // FIX: Cho phép meta có thể là undefined
+    users: IUser[];
+    meta?: IMeta;
 }
 const UserTable = (props: IProps) => {
-    // FIX: Cung cấp giá trị mặc định cho meta
     const { users, meta = { current: 1, pageSize: 10, pages: 0, total: 0 } } = props;
     const searchParams = useSearchParams();
     const pathname = usePathname();
@@ -54,7 +52,7 @@ const UserTable = (props: IProps) => {
         },
         {
             title: 'Actions',
-            render: (text: any, record: IUser) => { // Sử dụng kiểu IUser
+            render: (text: any, record: IUser) => {
                 return (
                     <>
                         <EditTwoTone

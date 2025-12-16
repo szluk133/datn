@@ -22,6 +22,9 @@ export class SearchHistory {
 
     @Prop({ type: [String], required: true })
     websites_crawled: string[];
+
+    @Prop({ default: 'processing', index: true }) 
+    status: string;
 }
 
 export const SearchHistorySchema = SchemaFactory.createForClass(SearchHistory);
@@ -30,12 +33,13 @@ SearchHistorySchema.set('toJSON', {
     virtuals: true,
     transform: (doc, ret) => {
         return {
-        _id: doc._id.toString(),
-        search_id: ret.search_id,
-        keyword_search: ret.keyword_search,
-        keyword_content: ret.keyword_content,
-        time_range: ret.time_range,
-        websites_crawled: ret.websites_crawled,
+            _id: doc._id.toString(),
+            search_id: ret.search_id,
+            keyword_search: ret.keyword_search,
+            keyword_content: ret.keyword_content,
+            time_range: ret.time_range,
+            websites_crawled: ret.websites_crawled,
+            status: ret.status || 'completed',
         };
     },
 });

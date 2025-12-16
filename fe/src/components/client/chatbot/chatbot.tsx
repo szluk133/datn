@@ -2,16 +2,24 @@
 
 import React, { useState } from 'react';
 import { useSession } from 'next-auth/react';
-import { Button, Layout, Card, Typography } from 'antd';
-import { MessageOutlined, CloseOutlined, ArrowsAltOutlined, ShrinkOutlined } from '@ant-design/icons';
+import { Button, Layout, Card, Typography, theme, Flex, Tooltip } from 'antd';
+import { 
+    MessageOutlined, 
+    CloseOutlined, 
+    ArrowsAltOutlined, 
+    ShrinkOutlined, 
+    RobotOutlined 
+} from '@ant-design/icons';
 import { useChatbot } from './chatbot.context';
 import ChatWindow from './chat.window';
 import ConversationHistory from './conversation.history';
 import ChatInput from './chat.input';
 
 const { Sider, Content } = Layout;
+const { Text } = Typography;
 
 const Chatbot: React.FC = () => {
+    const { token } = theme.useToken();
     const { data: session, status } = useSession();
     const { view, setView } = useChatbot();
     const [historyCollapsed, setHistoryCollapsed] = useState(false);
@@ -20,85 +28,97 @@ const Chatbot: React.FC = () => {
         return null;
     }
 
-    // Dạng 1: Icon ở góc
     if (view === 'icon') {
         return (
-            <Button
-                type="primary"
-                shape="circle"
-                icon={<MessageOutlined />}
-                size="large"
-                style={{
-                    position: 'fixed',
-                    bottom: 24,
-                    right: 24,
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-                    zIndex: 1000,
-                }}
-                onClick={() => {
-                    setView('window');
-                }}
-            />
+            <Tooltip title="Trợ lý AI" placement="left">
+                <Button
+                    type="primary"
+                    shape="circle"
+                    icon={<MessageOutlined style={{ fontSize: 24 }} />}
+                    size="large"
+                    style={{
+                        position: 'fixed',
+                        bottom: 30,
+                        right: 30,
+                        width: 60,
+                        height: 60,
+                        boxShadow: '0 6px 16px rgba(24, 144, 255, 0.35)',
+                        zIndex: 1000,
+                        background: `linear-gradient(135deg, ${token.colorPrimary}, ${token.colorPrimaryActive})`,
+                        border: 'none',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                    }}
+                    onClick={() => setView('window')}
+                    className="chatbot-trigger"
+                />
+            </Tooltip>
         );
     }
 
-    // Dạng 2: Khung chat nhỏ ở góc
     if (view === 'window') {
         return (
             <Card
-                title="Chatbot"
+                title={
+                    <Flex align="center" gap={8}>
+                        <RobotOutlined style={{ color: token.colorPrimary, fontSize: 18 }} />
+                        <Text strong>Trợ lý ảo LVC</Text>
+                    </Flex>
+                }
                 extra={
-                    <>
-                        <Button
-                            type="text"
-                            icon={<ArrowsAltOutlined />}
-                            onClick={() => setView('full')}
-                            style={{ marginRight: 8 }}
-                        />
-                        <Button
-                            type="text"
-                            icon={<CloseOutlined />}
-                            onClick={() => setView('icon')}
-                        />
-                    </>
+                    <Flex gap={4}>
+                        <Tooltip title="Mở rộng">
+                            <Button
+                                type="text"
+                                size="small"
+                                icon={<ArrowsAltOutlined />}
+                                onClick={() => setView('full')}
+                            />
+                        </Tooltip>
+                        <Tooltip title="Thu nhỏ">
+                            <Button
+                                type="text"
+                                size="small"
+                                icon={<CloseOutlined />}
+                                onClick={() => setView('icon')}
+                            />
+                        </Tooltip>
+                    </Flex>
                 }
                 style={{
                     position: 'fixed',
-                    bottom: 24,
-                    right: 24,
-                    width: 380,
-                    maxHeight: '70vh',
-                    minHeight: 400,
-                    boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+                    bottom: 30,
+                    right: 30,
+                    width: 400,
+                    height: 600,
+                    maxHeight: '80vh',
+                    boxShadow: '0 12px 48px rgba(0,0,0,0.12)',
                     zIndex: 1000,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    borderRadius: '12px',
+                    borderRadius: 16,
                     overflow: 'hidden',
+                    border: `1px solid ${token.colorBorderSecondary}`
                 }}
                 styles={{
                     header: {
-                        borderBottom: '1px solid #f0f0f0',
-                        padding: '16px 20px',
+                        borderBottom: `1px solid ${token.colorBorderSecondary}`,
+                        padding: '12px 20px',
+                        background: token.colorBgContainer,
                     },
                     body: {
                         padding: 0,
-                        flex: 1,
-                        overflow: 'hidden',
+                        height: 'calc(100% - 57px)',
+                        display: 'flex',
+                        flexDirection: 'column',
                     }
                 }}
             >
-                <Layout style={{ height: '100%', background: '#fff' }}>
-                    <Content style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                        <ChatWindow />
-                    </Content>
-                    <ChatInput />
-                </Layout>
+                <ChatWindow />
+                <ChatInput />
             </Card>
         );
     }
 
-    // Dạng 3: Chiếm 1/2 màn hình
     if (view === 'full') {
         return (
             <Layout
@@ -107,49 +127,53 @@ const Chatbot: React.FC = () => {
                     top: 64,
                     right: 0,
                     bottom: 0,
-                    width: '50vw',
+                    width: '60vw',
                     minWidth: 600,
+                    maxWidth: 1000,
                     zIndex: 999,
-                    boxShadow: '-4px 0 12px rgba(0,0,0,0.1)',
-                    background: '#f0f2f5',
-                    borderLeft: '1px solid #ddd'
+                    boxShadow: '-8px 0 24px rgba(0,0,0,0.08)',
+                    borderLeft: `1px solid ${token.colorBorderSecondary}`
                 }}
             >
                 <Sider
                     theme="light"
-                    width={250}
+                    width={280}
                     collapsible
                     collapsedWidth={80}
                     collapsed={historyCollapsed}
                     onCollapse={(collapsed) => setHistoryCollapsed(collapsed)}
-                    style={{ borderRight: '1px solid #f0f0f0' }}
+                    style={{ borderRight: `1px solid ${token.colorBorderSecondary}` }}
                 >
-                    {React.createElement(ConversationHistory as any, { collapsed: historyCollapsed })}
+                    <ConversationHistory collapsed={historyCollapsed} />
                 </Sider>
-                <Layout style={{ background: '#fff' }}>
+
+                <Layout style={{ background: token.colorBgContainer }}>
                     <div style={{
                         padding: '16px 24px',
-                        borderBottom: '1px solid #f0f0f0',
+                        borderBottom: `1px solid ${token.colorBorderSecondary}`,
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        background: '#fafafa',
+                        background: token.colorBgLayout,
                     }}>
-                        <Typography.Title level={4} style={{ margin: 0 }}>
-                            Chatbot
-                        </Typography.Title>
+                        <Flex align="center" gap={10}>
+                            <RobotOutlined style={{ fontSize: 20, color: token.colorPrimary }} />
+                            <Text strong style={{ fontSize: 16 }}>Trợ lý tìm kiếm & Phân tích</Text>
+                        </Flex>
+                        
                         <Button
-                            type="text"
+                            type="default"
                             icon={<ShrinkOutlined />}
                             onClick={() => setView('window')}
-                        />
+                        >
+                            Thu nhỏ
+                        </Button>
                     </div>
 
-                    <Content style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+                    <Content style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
                         <ChatWindow />
+                        <ChatInput />
                     </Content>
-                    <ChatInput />
-                    
                 </Layout>
             </Layout>
         );
@@ -159,4 +183,3 @@ const Chatbot: React.FC = () => {
 };
 
 export default Chatbot;
-

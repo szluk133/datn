@@ -85,23 +85,19 @@ export class ChatbotService {
     }));
   }
 
-  // Xử lý gửi câu hỏi sang RAG API
   async askQuestion(chatDto: ChatRequestDto): Promise<ChatResponseDto> {
     let conversationId = chatDto.conversation_id;
 
-    // 1. Nếu không có conversation_id, tạo mới
     if (!conversationId) {
       const newConv = await this.createConversation({ user_id: chatDto.user_id });
       conversationId = newConv.conversation_id;
     }
 
-    // 2. Chuẩn bị payload gửi sang External RAG API
-    // Mapping DTO -> External Payload
     const externalApiPayload = {
       user_id: chatDto.user_id,
       query: chatDto.query,
       conversation_id: conversationId,
-      context: chatDto.context, // Gửi nguyên object context (home_page, list_page, detail_page)
+      context: chatDto.context, 
     };
 
     let externalResponse: ExternalChatResponse;
@@ -113,7 +109,6 @@ export class ChatbotService {
       );
       externalResponse = response.data;
 
-      // Validate response cơ bản
       if (!externalResponse || typeof externalResponse.answer === 'undefined') {
         throw new Error('Invalid response structure from RAG API.');
       }
@@ -126,12 +121,11 @@ export class ChatbotService {
       throw new InternalServerErrorException('Hệ thống AI đang bận hoặc gặp sự cố.');
     }
 
-    // 3. Lưu tin nhắn vào DB
     const newMessage = new this.messageModel({
       conversation_id: conversationId,
       user_id: chatDto.user_id,
       query: chatDto.query,
-      context: chatDto.context, // Lưu lại context để debug nếu cần
+      context: chatDto.context,
       answer: externalResponse.answer,
       sources: externalResponse.sources || [],
       intent_detected: externalResponse.intent_detected,
@@ -139,7 +133,6 @@ export class ChatbotService {
     });
     await newMessage.save();
     
-    // 4. Cập nhật tiêu đề conversation nếu là tin nhắn đầu (hoặc chưa có tiêu đề)
     if (!chatDto.conversation_id) {
         await this.conversationModel.findByIdAndUpdate(conversationId, { title: chatDto.query });
     }

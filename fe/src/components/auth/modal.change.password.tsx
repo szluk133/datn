@@ -6,7 +6,6 @@ import { SmileOutlined, SolutionOutlined, UserOutlined } from '@ant-design/icons
 import { useState } from "react";
 import { sendRequest } from "@/utils/api";
 
-// Định nghĩa kiểu dữ liệu cho data trả về từ API retry-password
 interface IRetryPasswordData {
     email: string;
 }
@@ -23,7 +22,6 @@ const ModalChangePassword = (props: any) => {
 
     const onFinishStep0 = async (values: any) => {
         const { email } = values;
-        // FIX: Sử dụng kiểu generic là kiểu của 'data', không phải toàn bộ 'IBackendRes'
         const res = await sendRequest<IRetryPasswordData>({
             url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/retry-password`,
             method: "POST",
@@ -33,12 +31,11 @@ const ModalChangePassword = (props: any) => {
         })
 
         if (res?.data) {
-            // FIX: Truy cập trực tiếp vào res.data.email, TypeScript đã hiểu kiểu dữ liệu
             setUserEmail(res.data.email)
             setCurrent(1);
         } else {
             notification.error({
-                message: "Có lỗi xảy ra",
+                title: "Có lỗi xảy ra",
                 description: res?.message
             })
         }
@@ -49,12 +46,11 @@ const ModalChangePassword = (props: any) => {
         const { code, password, confirmPassword } = values;
         if (password !== confirmPassword) {
             notification.error({
-                message: "Dữ liệu không hợp lệ",
+                title: "Dữ liệu không hợp lệ",
                 description: "Mật khẩu và xác nhận mật khẩu không khớp."
             })
             return;
         }
-        // Giả sử API này không trả về data quan trọng, dùng 'any' là chấp nhận được
         const res = await sendRequest<any>({
             url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/auth/change-password`,
             method: "POST",
@@ -63,11 +59,11 @@ const ModalChangePassword = (props: any) => {
             }
         })
 
-        if (res.statusCode === 201) { // Kiểm tra statusCode để chắc chắn thành công
+        if (res.statusCode === 201) {
             setCurrent(2);
         } else {
             notification.error({
-                message: "Có lỗi xảy ra",
+                title: "Có lỗi xảy ra",
                 description: res?.message
             })
         }

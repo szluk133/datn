@@ -1,7 +1,7 @@
 import { Injectable, InternalServerErrorException, Logger, BadRequestException, NotFoundException, MessageEvent } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { InjectModel } from '@nestjs/mongoose';
-import { Model, PipelineStage } from 'mongoose';
+import { Model, PipelineStage, isValidObjectId } from 'mongoose';
 import { CrawlRequestDto, ArticleResponseDto, CrawlTriggerResponseDto } from './dto/crawl-request';
 import { SearchHistoryResponseDto } from './dto/search-history';
 import { Article, ArticleDocument } from './schemas/article.schema';
@@ -234,9 +234,18 @@ export class ArticleService {
         return history.map(item => ({ ...item.toJSON(), _id: item._id.toString() } as SearchHistoryResponseDto));
     }
 
-    async getArticleDetailById(articleId: string): Promise<Article> {
-        const article = await this.articleModel.findById(articleId).exec();
-        if (!article) throw new NotFoundException();
+    async getArticleDetailById(identifier: string): Promise<Article> {
+        const conditions: any[] = [{ article_id: identifier }];
+        
+        if (isValidObjectId(identifier)) {
+            conditions.push({ _id: identifier });
+        }
+
+        const article = await this.articleModel.findOne({ $or: conditions }).exec();
+
+        if (!article) {
+            throw new NotFoundException(`Không tìm thấy bài viết với ID: ${identifier}`);
+        }
         return article.toObject();
     }
 

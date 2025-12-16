@@ -5,6 +5,9 @@ export type ArticleDocument = Article & Document;
 
 @Schema({ timestamps: true, collection: 'articles' })
 export class Article {
+    @Prop({ index: true }) 
+    article_id: string;
+
     @Prop({ required: true })
     title: string;
 
@@ -49,6 +52,7 @@ ArticleSchema.set('toJSON', {
     transform: (doc, ret) => {
         return {
             id: doc._id.toString(),
+            article_id: ret.article_id,
             title: ret.title,
             summary: ret.summary,
             website: ret.website,

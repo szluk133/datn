@@ -9,7 +9,6 @@ export class ChatbotController {
 
   constructor(private readonly chatbotService: ChatbotService) {}
 
-  // --- 1. Health Check (Theo tài liệu mục 1) ---
   @Get('health')
   @Public()
   healthCheck() {
@@ -20,7 +19,7 @@ export class ChatbotController {
     };
   }
 
-  // --- 2. Tạo Conversation ---
+  // Tạo Conversation
   @Post('conversations')
   @Public()
   @UsePipes(new ValidationPipe({ transform: true }))
@@ -29,7 +28,7 @@ export class ChatbotController {
     return this.chatbotService.createConversation(createDto);
   }
 
-  // --- 3. Lấy lịch sử Conversation ---
+  // Lấy lịch sử Conversation
   @Get('conversations/:userId')
   @Public()
   async getConversationHistory(@Param('userId') userId: string): Promise<ConversationHistoryDto[]> {
@@ -37,7 +36,7 @@ export class ChatbotController {
     return this.chatbotService.getConversationHistory(userId);
   }
 
-  // --- 4. Lấy chi tiết tin nhắn ---
+  // Lấy chi tiết tin nhắn
   @Get('messages/:conversationId')
   @Public()
   async getMessageHistory(@Param('conversationId') conversationId: string): Promise<MessageHistoryDto[]> {
@@ -45,7 +44,7 @@ export class ChatbotController {
       return this.chatbotService.getMessagesByConversationId(conversationId);
   }
 
-  // --- 5. API Chat (Gửi tin nhắn) ---
+  // Gửi tin nhắn
   @Post('chat')
   @Public()
   @UsePipes(new ValidationPipe({ transform: true }))

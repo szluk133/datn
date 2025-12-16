@@ -1,14 +1,15 @@
 'use client';
 
 import React, { useEffect } from 'react';
-import { Layout, Menu, Button, Spin, Empty, Typography } from 'antd';
-import { PlusOutlined, HistoryOutlined } from '@ant-design/icons';
+import { Layout, Menu, Button, Spin, Empty, Typography, theme, Flex } from 'antd';
+import { PlusOutlined, MessageOutlined, HistoryOutlined } from '@ant-design/icons';
 import { useChatbot } from './chatbot.context';
 import type { MenuProps } from 'antd';
 
-const { Title } = Typography;
+const { Title, Text } = Typography;
 
 const ConversationHistory: React.FC<{ collapsed?: boolean }> = ({ collapsed }) => {
+    const { token } = theme.useToken();
     const {
         conversations,
         loadConversations,
@@ -26,59 +27,81 @@ const ConversationHistory: React.FC<{ collapsed?: boolean }> = ({ collapsed }) =
 
     const menuItems: MenuProps['items'] = conversations.map(convo => ({
         key: convo.conversation_id,
-        label: collapsed ? "" : (convo.title.length > 25 ? `${convo.title.substring(0, 25)}...` : convo.title),
-        icon: collapsed ? <HistoryOutlined /> : null,
+        label: (
+            <Text ellipsis style={{ width: collapsed ? 0 : '100%', color: 'inherit' }}>
+                {convo.title || "Cuộc trò chuyện mới"}
+            </Text>
+        ),
+        icon: <MessageOutlined />,
         onClick: () => loadMessages(convo.conversation_id),
         style: {
-            borderRadius: '6px',
-            fontSize: '14px',
+            borderRadius: token.borderRadiusLG,
             margin: '4px 0',
-            paddingLeft: collapsed ? '16px' : '24px'
         }
     }));
 
     return (
-        <Layout style={{ height: '100%', background: '#fff' }}>
-            <div style={{ padding: '16px', borderBottom: '1px solid #e8e8e8' }}>
-                <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={startNewChat}
-                    style={{ width: '100%' }}
-                >
-                    {!collapsed && "Đoạn chat mới"}
-                </Button>
+        <Flex vertical style={{ height: '100%', background: token.colorBgContainer }}>
+            <div style={{ padding: '16px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
+                {collapsed ? (
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={startNewChat}
+                        block
+                        shape="circle"
+                        title="Đoạn chat mới"
+                    />
+                ) : (
+                    <Button
+                        type="primary"
+                        icon={<PlusOutlined />}
+                        onClick={startNewChat}
+                        block
+                        style={{ 
+                            borderRadius: 8, 
+                            height: 40, 
+                            background: token.colorPrimary,
+                            fontWeight: 500
+                        }}
+                    >
+                        Đoạn chat mới
+                    </Button>
+                )}
             </div>
             
             {!collapsed && (
-                <Title
-                    level={5}
-                    style={{
-                        padding: '16px 16px 8px 16px',
-                        margin: 0,
-                        color: '#666',
-                        textTransform: 'uppercase',
-                        fontSize: '12px'
-                    }}
-                >
-                    <HistoryOutlined style={{ marginRight: '8px' }} /> Lịch sử
-                </Title>
+                <div style={{ padding: '16px 16px 8px 24px' }}>
+                    <Text type="secondary" style={{ fontSize: 12, textTransform: 'uppercase', fontWeight: 600 }}>
+                        <HistoryOutlined style={{ marginRight: 6 }} /> Lịch sử trò chuyện
+                    </Text>
+                </div>
             )}
 
-            {isLoadingApi && conversations.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '20px' }}><Spin /></div>
-            ) : conversations.length > 0 ? (
-                <Menu
-                    mode="inline"
-                    items={menuItems}
-                    selectedKeys={[currentConversationId || '']}
-                    style={{ borderRight: 0, flex: 1, overflowY: 'auto', padding: '0 8px' }}
-                    inlineCollapsed={collapsed}
-                />
-            ) : (
-                !collapsed && <Empty description="Chưa có cuộc trò chuyện nào" style={{ padding: '20px' }} />
-            )}
-        </Layout>
+            <div style={{ flex: 1, overflowY: 'auto', padding: '0 8px' }}>
+                {isLoadingApi && conversations.length === 0 ? (
+                    <Flex justify="center" align="center" style={{ marginTop: 20 }}>
+                        <Spin />
+                    </Flex>
+                ) : conversations.length > 0 ? (
+                    <Menu
+                        mode="inline"
+                        items={menuItems}
+                        selectedKeys={[currentConversationId || '']}
+                        style={{ border: 'none' }}
+                        inlineCollapsed={collapsed}
+                    />
+                ) : (
+                    !collapsed && (
+                        <Empty 
+                            image={Empty.PRESENTED_IMAGE_SIMPLE} 
+                            description={<Text type="secondary">Chưa có hội thoại nào</Text>} 
+                            style={{ marginTop: 30 }}
+                        />
+                    )
+                )}
+            </div>
+        </Flex>
     );
 };
 

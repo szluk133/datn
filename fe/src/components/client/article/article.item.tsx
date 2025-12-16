@@ -1,8 +1,15 @@
 'use client';
 
 import React from 'react';
-import { List, Typography, Tag, Checkbox, Tooltip, Button } from 'antd';
-import { ReadOutlined, DownloadOutlined, SmileOutlined, MehOutlined, FrownOutlined, GlobalOutlined, LinkOutlined } from '@ant-design/icons';
+import { Typography, Tag, Checkbox, Tooltip, Card, Space, Divider, Flex, theme } from 'antd';
+import { 
+    GlobalOutlined, 
+    LinkOutlined, 
+    CalendarOutlined,
+    SmileFilled, 
+    MehFilled, 
+    FrownFilled
+} from '@ant-design/icons';
 import Link from 'next/link';
 import { IArticle } from '@/types/next-auth';
 import BookmarkButton from './bookmark.btn';
@@ -17,17 +24,18 @@ interface ArticleItemProps {
 }
 
 const ArticleItem = ({ article, isSelected = false, onToggleSelect }: ArticleItemProps) => {
+    const { token } = theme.useToken();
     
     const getSentimentInfo = (score: number | null | undefined) => {
         if (score === undefined || score === null || isNaN(score)) {
-            return { color: 'default', icon: <MehOutlined />, label: 'N/A' };
+            return { color: token.colorTextDescription, icon: <MehFilled />, label: 'Chưa phân tích', bg: token.colorFillQuaternary };
         }
         
-        if (score >= 0.5) return { color: 'success', icon: <SmileOutlined />, label: 'Tích cực' };
-        if (score > 0) return { color: 'processing', icon: <SmileOutlined />, label: 'Khá tốt' };
-        if (score === 0) return { color: 'warning', icon: <MehOutlined />, label: 'Trung tính' };
-        if (score > -0.5) return { color: 'error', icon: <FrownOutlined />, label: 'Tiêu cực' };
-        return { color: '#cf1322', icon: <FrownOutlined />, label: 'Rất tiêu cực' };
+        if (score >= 0.5) return { color: token.colorSuccess, icon: <SmileFilled />, label: 'Tích cực', bg: token.colorSuccessBg };
+        if (score > 0) return { color: token.colorInfo, icon: <SmileFilled />, label: 'Khá tốt', bg: token.colorInfoBg };
+        if (score === 0) return { color: token.colorWarning, icon: <MehFilled />, label: 'Trung tính', bg: token.colorWarningBg };
+        if (score > -0.5) return { color: token.colorError, icon: <FrownFilled />, label: 'Tiêu cực', bg: token.colorErrorBg };
+        return { color: token.colorErrorActive, icon: <FrownFilled />, label: 'Rất tiêu cực', bg: token.colorErrorBg };
     };
 
     const sentimentScore = (article.ai_sentiment_score !== undefined && article.ai_sentiment_score !== null) 
@@ -38,290 +46,120 @@ const ArticleItem = ({ article, isSelected = false, onToggleSelect }: ArticleIte
     const articleId = article.id || article._id;
 
     return (
-        <List.Item
-            className="article-item-group"
+        <Card
+            hoverable
+            className={`article-card ${isSelected ? 'selected' : ''}`}
             style={{
+                borderRadius: token.borderRadiusLG,
+                border: isSelected ? `1px solid ${token.colorPrimary}` : `1px solid ${token.colorBorderSecondary}`,
+                transition: 'all 0.3s ease',
+                backgroundColor: isSelected ? token.colorPrimaryBg : token.colorBgContainer,
                 position: 'relative',
-                transition: 'all 0.3s',
-                backgroundColor: isSelected ? '#e6f7ff' : '#fff',
-                border: isSelected ? '1px solid #1890ff' : '1px solid #f0f0f0',
-                borderRadius: '8px',
-                padding: '16px',
-                marginBottom: '16px',
-                display: 'block'
+                overflow: 'hidden'
             }}
+            styles={{ body: { padding: '20px' } }}
         >
-            <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-                
-                {/* Cột bên trái: Icon & Checkbox */}
-                <div style={{ marginRight: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '40px' }}>
-                    <ReadOutlined style={{ fontSize: '28px', color: '#1890ff', marginBottom: '12px' }} />
+            <div 
+                style={{ 
+                    position: 'absolute', 
+                    left: 0, 
+                    top: 0, 
+                    bottom: 0, 
+                    width: '4px', 
+                    backgroundColor: sentiment.color 
+                }} 
+            />
+
+            <Flex gap={16} align="start">
+                <Flex vertical align="center" style={{ paddingTop: 4 }}>
                     {onToggleSelect && (
                         <Checkbox 
                             checked={isSelected} 
                             onChange={() => onToggleSelect(articleId)}
+                            style={{ transform: 'scale(1.2)' }}
                         />
                     )}
-                </div>
+                </Flex>
 
-                {/* Cột bên phải: Nội dung chính */}
-                <div style={{ flex: 1, width: '100%' }}>
-                    
-                    {/* Hàng 1: Title & Categories */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-                        <div style={{ flex: 1, marginRight: '12px' }}>
-                            <Title level={5} style={{ margin: 0 }}>
-                                <Link href={`/model/article/${articleId}`} style={{ color: '#000', transition: 'color 0.3s' }} className="hover:text-blue-500">
-                                    {article.title}
-                                </Link>
-                            </Title>
-                        </div>
-                        {article.site_categories && article.site_categories.length > 0 && (
-                            <div style={{ flexShrink: 0 }}>
-                                {article.site_categories.map((cat, index) => (
-                                    <Tag key={index} color="cyan" style={{ margin: '0 0 0 4px' }}>{cat}</Tag>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+                <div style={{ flex: 1 }}>
+                    <Flex justify="space-between" align="center" style={{ marginBottom: 8 }}>
+                        <Space separator={<Divider orientation="vertical" />}>
+                            <Tag color="geekblue" style={{ borderRadius: token.borderRadiusSM, display: 'flex', alignItems: 'center', gap: 4 }}>
+                                <GlobalOutlined /> {article.website}
+                            </Tag>
+                            <Text type="secondary" style={{ fontSize: 13 }}>
+                                <CalendarOutlined style={{ marginRight: 4 }} />
+                                {new Date(article.publish_date).toLocaleDateString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                            </Text>
+                        </Space>
+                        
+                        <Tooltip title={`Điểm cảm xúc: ${sentimentScore ?? 'N/A'}`}>
+                            <Tag 
+                                style={{ 
+                                    border: 'none', 
+                                    backgroundColor: sentiment.bg, 
+                                    color: sentiment.color,
+                                    borderRadius: 20,
+                                    padding: '2px 10px',
+                                    fontWeight: 500
+                                }}
+                            >
+                                {sentiment.icon} <span style={{ marginLeft: 4 }}>{sentiment.label}</span>
+                            </Tag>
+                        </Tooltip>
+                    </Flex>
 
-                    {/* Hàng 2: Ngày đăng */}
-                    <div style={{ marginBottom: '8px' }}>
-                        <Text type="secondary" style={{ fontSize: '12px' }}>
-                            {new Date(article.publish_date).toLocaleDateString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-                        </Text>
-                    </div>
+                    <Title level={4} style={{ margin: '4px 0 12px 0', lineHeight: 1.4 }}>
+                        <Link href={`/model/article/${articleId}`} style={{ color: token.colorText }}>
+                            <span 
+                                className="hover:text-blue-600 transition-colors duration-300"
+                                onMouseEnter={(e) => e.currentTarget.style.color = token.colorPrimary}
+                                onMouseLeave={(e) => e.currentTarget.style.color = token.colorText}
+                            >
+                                {article.title}
+                            </span>
+                        </Link>
+                    </Title>
 
-                    {/* Hàng 3: Tóm tắt */}
-                    <Paragraph ellipsis={{ rows: 2, expandable: false }} style={{ color: '#595959', marginBottom: '12px' }}>
+                    <Paragraph 
+                        ellipsis={{ rows: 2, expandable: false }} 
+                        style={{ color: token.colorTextSecondary, fontSize: 15, marginBottom: 16, lineHeight: 1.6 }}
+                    >
                         {article.summary}
                     </Paragraph>
 
-                    {/* Hàng 4 (Footer) */}
-                    <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                        <Tag color="blue" icon={<GlobalOutlined />}>{article.website}</Tag>
-                        <Tag color={sentiment.color} icon={sentiment.icon}>
-                            {sentiment.label} 
-                            {(sentimentScore !== undefined && !isNaN(sentimentScore)) ? ` (${sentimentScore})` : ''}
-                        </Tag>
-                        <a href={article.url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', fontSize: '13px', marginLeft: '4px' }}>
-                            <LinkOutlined style={{ marginRight: '4px' }} /> Xem bài gốc
-                        </a>
-                    </div>
+                    <Flex justify="space-between" align="center" wrap="wrap" gap={8}>
+                        <Space size={[0, 8]} wrap>
+                            {article.site_categories && article.site_categories.map((cat, index) => (
+                                <Tag key={index} style={{ color: token.colorTextSecondary, background: token.colorFillQuaternary, border: 'none' }}># {cat}</Tag>
+                            ))}
+                        </Space>
+
+                        <Space>
+                            <a href={article.url} target="_blank" rel="noopener noreferrer" style={{ color: token.colorTextDescription, fontSize: 13 }}>
+                                <LinkOutlined /> Nguồn gốc
+                            </a>
+                            <Divider orientation="vertical" />
+
+                            <BookmarkButton 
+                                articleId={articleId} 
+                                articleTitle={article.title}
+                                articleUrl={article.url}
+                                size="middle"
+                            />
+                        </Space>
+                    </Flex>
                 </div>
-            </div>
+            </Flex>
 
-            <div 
-                className="select-overlay"
-                style={{
-                    position: 'absolute',
-                    right: '10px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    opacity: isSelected ? 1 : 0,
-                    transition: 'opacity 0.2s',
-                    zIndex: 10,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '8px'
-                }}
-            >
-                {/* Nút Bookmark */}
-                <BookmarkButton 
-                    articleId={articleId} 
-                    articleTitle={article.title}
-                    articleUrl={article.url}
-                    shape="circle"
-                    size="middle"
-                    type="default"
-                />
-
-                {/* Nút Download/Select */}
-                {onToggleSelect && !isSelected && (
-                    <Tooltip title="Đánh dấu tải về">
-                        <Button 
-                            type="default"
-                            shape="circle"
-                            icon={<DownloadOutlined />}
-                            onClick={() => onToggleSelect(articleId)}
-                        />
-                    </Tooltip>
-                )}
-            </div>
-            
             <style jsx global>{`
-                .article-item-group:hover .select-overlay {
-                    opacity: 1 !important;
+                .article-card:hover {
+                    box-shadow: ${token.boxShadow};
+                    transform: translateY(-2px);
                 }
             `}</style>
-        </List.Item>
+        </Card>
     );
 };
 
 export default ArticleItem;
-
-// import React from 'react';
-// import { List, Typography, Tag, Checkbox, Tooltip, Button, Space } from 'antd';
-// import { ReadOutlined, DownloadOutlined, SmileOutlined, MehOutlined, FrownOutlined, GlobalOutlined, LinkOutlined } from '@ant-design/icons';
-// import Link from 'next/link';
-// import { IArticle } from '@/types/next-auth';
-
-// const { Paragraph, Text, Title } = Typography;
-
-// interface ArticleItemProps {
-//     article: IArticle;
-//     isSelected?: boolean;
-//     onToggleSelect?: (id: string) => void;
-// }
-
-// const ArticleItem = ({ article, isSelected = false, onToggleSelect }: ArticleItemProps) => {
-    
-//     // --- Logic xác định màu sắc Sentiment ---
-//     const getSentimentInfo = (score: number | null | undefined) => {
-//         if (score === undefined || score === null || isNaN(score)) {
-//             return { color: 'default', icon: <MehOutlined />, label: 'N/A' };
-//         }
-        
-//         if (score >= 0.5) return { color: 'success', icon: <SmileOutlined />, label: 'Tích cực' };
-//         if (score > 0) return { color: 'processing', icon: <SmileOutlined />, label: 'Khá tốt' };
-//         if (score === 0) return { color: 'warning', icon: <MehOutlined />, label: 'Trung tính' };
-//         if (score > -0.5) return { color: 'error', icon: <FrownOutlined />, label: 'Tiêu cực' };
-//         return { color: '#cf1322', icon: <FrownOutlined />, label: 'Rất tiêu cực' };
-//     };
-
-//     const sentimentScore = (article.ai_sentiment_score !== undefined && article.ai_sentiment_score !== null) 
-//         ? Number(article.ai_sentiment_score) 
-//         : undefined;
-
-//     const sentiment = getSentimentInfo(sentimentScore);
-
-//     return (
-//         <List.Item
-//             className="article-item-group"
-//             style={{
-//                 position: 'relative',
-//                 transition: 'all 0.3s',
-//                 backgroundColor: isSelected ? '#e6f7ff' : 'transparent',
-//                 border: isSelected ? '1px solid #1890ff' : '1px solid #f0f0f0',
-//                 borderRadius: '8px',
-//                 padding: '16px',
-//                 marginBottom: '16px',
-//                 display: 'block' // Sử dụng block để control layout thủ công thay vì flex mặc định của List.Item
-//             }}
-//         >
-//             <div style={{ display: 'flex', alignItems: 'flex-start' }}>
-                
-//                 {/* --- Cột bên trái: Icon & Checkbox --- */}
-//                 <div style={{ marginRight: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: '40px' }}>
-//                     <ReadOutlined style={{ fontSize: '28px', color: '#1890ff', marginBottom: '12px' }} />
-//                     {onToggleSelect && (
-//                         <Checkbox 
-//                             checked={isSelected} 
-//                             onChange={() => onToggleSelect(article.id)}
-//                         />
-//                     )}
-//                 </div>
-
-//                 {/* --- Cột bên phải: Nội dung chính --- */}
-//                 <div style={{ flex: 1, width: '100%' }}>
-                    
-//                     {/* Hàng 1: Title & Categories (Cùng hàng) */}
-//                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '4px' }}>
-                        
-//                         {/* Title */}
-//                         <div style={{ flex: 1, marginRight: '12px' }}>
-//                             <Title level={5} style={{ margin: 0 }}>
-//                                 <Link href={`/model/article/${article.id}`} style={{ color: '#000', transition: 'color 0.3s' }} className="hover:text-blue-500">
-//                                     {article.title}
-//                                 </Link>
-//                             </Title>
-//                         </div>
-
-//                         {/* Categories */}
-//                         {article.site_categories && article.site_categories.length > 0 && (
-//                             <div style={{ flexShrink: 0 }}>
-//                                 {article.site_categories.map((cat, index) => (
-//                                     <Tag key={index} color="cyan" style={{ margin: '0 0 0 4px' }}>
-//                                         {cat}
-//                                     </Tag>
-//                                 ))}
-//                             </div>
-//                         )}
-//                     </div>
-
-//                     {/* Hàng 2: Ngày đăng */}
-//                     <div style={{ marginBottom: '8px' }}>
-//                         <Text type="secondary" style={{ fontSize: '12px' }}>
-//                             {new Date(article.publish_date).toLocaleDateString('vi-VN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}
-//                         </Text>
-//                     </div>
-
-//                     {/* Hàng 3: Tóm tắt */}
-//                     <Paragraph ellipsis={{ rows: 2, expandable: false }} style={{ color: '#595959', marginBottom: '12px' }}>
-//                         {article.summary}
-//                     </Paragraph>
-
-//                     {/* Hàng 4 (Footer): Website - Cảm xúc - Link gốc (Cùng hàng, góc trái) */}
-//                     <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
-                        
-//                         {/* Website */}
-//                         <Tag color="blue" icon={<GlobalOutlined />}>
-//                             {article.website}
-//                         </Tag>
-
-//                         {/* Cảm xúc */}
-//                         <Tag color={sentiment.color} icon={sentiment.icon}>
-//                             {sentiment.label} 
-//                             {(sentimentScore !== undefined && !isNaN(sentimentScore)) ? ` (${sentimentScore})` : ''}
-//                         </Tag>
-
-//                         {/* Link xem bài gốc */}
-//                         <a 
-//                             href={article.url} 
-//                             target="_blank" 
-//                             rel="noopener noreferrer" 
-//                             style={{ display: 'flex', alignItems: 'center', fontSize: '13px', marginLeft: '4px' }}
-//                         >
-//                             <LinkOutlined style={{ marginRight: '4px' }} /> Xem bài gốc
-//                         </a>
-//                     </div>
-
-//                 </div>
-//             </div>
-
-//             {/* --- Nút Hover Quick Action --- */}
-//             <div 
-//                 className="select-overlay"
-//                 style={{
-//                     position: 'absolute',
-//                     right: '10px',
-//                     top: '50%',
-//                     transform: 'translateY(-50%)',
-//                     opacity: isSelected ? 1 : 0,
-//                     transition: 'opacity 0.2s',
-//                     zIndex: 10
-//                 }}
-//             >
-//                 {onToggleSelect && !isSelected && (
-//                     <Tooltip title="Đánh dấu tải về">
-//                         <Button 
-//                             type="default"
-//                             shape="circle"
-//                             icon={<DownloadOutlined />}
-//                             onClick={() => onToggleSelect(article.id)}
-//                             style={{ boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
-//                         />
-//                     </Tooltip>
-//                 )}
-//             </div>
-            
-//             <style jsx global>{`
-//                 .article-item-group:hover .select-overlay {
-//                     opacity: 1 !important;
-//                 }
-//             `}</style>
-//         </List.Item>
-//     );
-// };
-
-// export default ArticleItem;

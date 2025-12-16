@@ -138,6 +138,7 @@ async def start_crawl(
         0, total_existing, f"{params.start_date}-{params.end_date}", status
     )
     
+    
     return {
         "status": status,
         "search_id": search_id,

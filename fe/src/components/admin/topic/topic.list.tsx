@@ -44,7 +44,7 @@ const TopicList = (props: IProps) => {
 
     const handleInitTopics = async () => {
         if (!selectedWebsite) {
-            notification.warning({ message: "Vui lòng chọn website trước khi cập nhật!" });
+            notification.warning({ title: "Vui lòng chọn website trước khi cập nhật!" });
             return;
         }
 
@@ -57,13 +57,13 @@ const TopicList = (props: IProps) => {
             });
 
             if (res.data) {
-                notification.success({ message: "Đã gửi yêu cầu cập nhật chủ đề thành công!" });
+                notification.success({ title: "Đã gửi yêu cầu cập nhật chủ đề thành công!" });
                 router.refresh();
             } else {
-                notification.error({ message: "Có lỗi xảy ra khi cập nhật chủ đề." });
+                notification.error({ title: "Có lỗi xảy ra khi cập nhật chủ đề." });
             }
         } catch (error) {
-            notification.error({ message: "Lỗi kết nối đến server." });
+            notification.error({ title: "Lỗi kết nối đến server." });
             console.error(error);
         } finally {
             setLoadingInit(false);

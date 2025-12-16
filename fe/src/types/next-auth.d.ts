@@ -32,6 +32,7 @@ export interface ISearchHistory {
     websites_crawled: string[];
     created_at?: string;
     timestamp?: number;
+    status?: string;
 }
 export interface IUser {
     _id: string;

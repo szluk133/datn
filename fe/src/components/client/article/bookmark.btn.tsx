@@ -50,12 +50,12 @@ const BookmarkButton = (props: IBookmarkProps) => {
         e.stopPropagation();
         
         if (status !== 'authenticated') {
-            notification.warning({ message: "Vui lòng đăng nhập để lưu bài viết!" });
+            notification.warning({ title: "Vui lòng đăng nhập để lưu bài viết!" });
             return;
         }
 
         if (!session?.user?._id) {
-            notification.error({ message: "Không tìm thấy thông tin người dùng!" });
+            notification.error({ title: "Không tìm thấy thông tin người dùng!" });
             return;
         }
 
@@ -69,10 +69,9 @@ const BookmarkButton = (props: IBookmarkProps) => {
                 });
                 if (res.statusCode === 200) {
                     setIsSaved(false);
-                    notification.success({ message: "Đã bỏ lưu bài viết" });
+                    notification.success({ title: "Đã bỏ lưu bài viết" });
                 }
             } else {
-                // Lưu mới
                 const res = await sendRequest<any>({
                     url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/saved-articles`,
                     method: 'POST',
@@ -87,16 +86,16 @@ const BookmarkButton = (props: IBookmarkProps) => {
                 
                 if (res.statusCode === 201) {
                     setIsSaved(true);
-                    notification.success({ message: "Đã lưu bài viết thành công" });
+                    notification.success({ title: "Đã lưu bài viết thành công" });
                 } else if (res.statusCode === 409) {
                     setIsSaved(true);
-                    notification.info({ message: "Bài viết này đã được lưu trước đó" });
+                    notification.info({ title: "Bài viết này đã được lưu trước đó" });
                 } else {
-                    notification.error({ message: res.message || "Không thể lưu bài viết" });
+                    notification.error({ title: res.message || "Không thể lưu bài viết" });
                 }
             }
         } catch (error) {
-            notification.error({ message: "Có lỗi xảy ra khi cập nhật trạng thái lưu" });
+            notification.error({ title: "Có lỗi xảy ra khi cập nhật trạng thái lưu" });
         } finally {
             setLoading(false);
         }
