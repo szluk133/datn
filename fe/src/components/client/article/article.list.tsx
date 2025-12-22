@@ -281,7 +281,7 @@ const ArticleList = () => {
                                     mode="multiple"
                                     allowClear
                                     style={{ width: '100%' }}
-                                    placeholder="Tất cả nguồn (Mặc định)"
+                                    placeholder="Mặc định 3 nguồn"
                                     loading={loadingWebsites}
                                     notFoundContent={loadingWebsites ? <Spin size="small" /> : null}
                                     options={availableWebsites.map(ws => ({ label: ws.displayName, value: ws.name }))}

@@ -47,7 +47,6 @@ const HomePage = () => {
 
     return (
         <Layout className="layout" style={{ minHeight: '100vh', background: '#fff' }}>
-            {/* --- HEADER --- */}
             <Header style={{ 
                 display: 'flex', 
                 alignItems: 'center', 
@@ -74,7 +73,6 @@ const HomePage = () => {
             </Header>
 
             <Content>
-                {/* --- HERO SECTION --- */}
                 <div style={{ 
                     background: 'linear-gradient(135deg, #001529 0%, #0050b3 100%)', 
                     padding: '100px 20px', 
@@ -109,7 +107,6 @@ const HomePage = () => {
                     </Row>
                 </div>
 
-                {/* --- FEATURES SECTION --- */}
                 <div id="features" style={{ padding: '80px 50px', background: '#f0f2f5' }}>
                     <div style={{ textAlign: 'center', marginBottom: 60 }}>
                         <Title level={2}>Tính năng nổi bật</Title>
@@ -137,7 +134,6 @@ const HomePage = () => {
                     </Row>
                 </div>
 
-                {/* --- CHATBOT SECTION --- */}
                 <div style={{ padding: '80px 50px', background: '#fff' }}>
                     <Row align="middle" gutter={[64, 32]}>
                         <Col xs={24} md={12}>
@@ -170,26 +166,24 @@ const HomePage = () => {
                     </Row>
                 </div>
 
-                {/* --- STATS SECTION --- */}
                 <div style={{ padding: '60px 50px', background: '#001529', color: '#fff' }}>
                     <Row gutter={[32, 32]} justify="center">
                         <Col xs={12} md={6} style={{ textAlign: 'center' }}>
-                            <Statistic title={<span style={{ color: '#bae7ff' }}>Bài viết đã Crawl</span>} value={15890} valueStyle={{ color: '#fff', fontSize: 36 }} />
+                            <Statistic title={<span style={{ color: '#bae7ff' }}>Bài viết đã Crawl</span>} value={15890} styles={{ content: { color: '#fff', fontSize: 36 },}} />
                         </Col>
                         <Col xs={12} md={6} style={{ textAlign: 'center' }}>
-                            <Statistic title={<span style={{ color: '#bae7ff' }}>Nguồn báo</span>} value={2} valueStyle={{ color: '#fff', fontSize: 36 }} suffix="Websites" />
+                            <Statistic title={<span style={{ color: '#bae7ff' }}>Nguồn báo</span>} value={2} styles={{ content: { color: '#fff', fontSize: 36 },}} suffix="Websites" />
                         </Col>
                         <Col xs={12} md={6} style={{ textAlign: 'center' }}>
-                            <Statistic title={<span style={{ color: '#bae7ff' }}>Người dùng</span>} value={250} valueStyle={{ color: '#fff', fontSize: 36 }} prefix={<UserAddOutlined />} />
+                            <Statistic title={<span style={{ color: '#bae7ff' }}>Người dùng</span>} value={250} styles={{ content: { color: '#fff', fontSize: 36 },}} prefix={<UserAddOutlined />} />
                         </Col>
                         <Col xs={12} md={6} style={{ textAlign: 'center' }}>
-                            <Statistic title={<span style={{ color: '#bae7ff' }}>Độ chính xác AI</span>} value={95} valueStyle={{ color: '#fff', fontSize: 36 }} suffix="%" />
+                            <Statistic title={<span style={{ color: '#bae7ff' }}>Độ chính xác AI</span>} value={95} styles={{ content: { color: '#fff', fontSize: 36 },}} suffix="%" />
                         </Col>
                     </Row>
                 </div>
             </Content>
 
-            {/* --- FOOTER --- */}
             <Footer style={{ textAlign: 'center', background: '#f0f2f5', padding: '40px 50px' }}>
                 <Row justify="center" style={{ marginBottom: 20 }}>
                     <Space size="large">

@@ -15,11 +15,16 @@ export class PaginationParamsDto {
     @Min(1)
     limit?: number;
 }
-
+export interface SentimentStats {
+    positive: number;
+    negative: number;
+    neutral: number;
+}
 export interface PaginatedArticleResponse {
     data: ArticleResponseDto[];
     total: number;
     page: number;
     limit: number;
     totalPages: number;
+    sentiment_stats?: SentimentStats;
 }

@@ -3,12 +3,19 @@ import { sendRequest } from "@/utils/api";
 import { IArticle } from "@/types/next-auth";
 import ArticleResultList from "@/components/client/article/article.result.list";
 
+export interface SentimentStats {
+    positive: number;
+    negative: number;
+    neutral: number;
+}
+
 interface IPaginatedArticleResponse {
     data: IArticle[];
     total: number;
     page: number;
     limit: number;
     totalPages: number;
+    sentiment_stats?: SentimentStats;
 }
 
 const ArticleResultsPage = async ({
@@ -25,6 +32,7 @@ const ArticleResultsPage = async ({
 
     let articles: IArticle[] = [];
     let meta = { current: 1, pageSize: 5, total: 0, totalPages: 0 };
+    let sentimentStats: SentimentStats | undefined = undefined;
 
     if (searchId && session) {
         try {
@@ -42,6 +50,9 @@ const ArticleResultsPage = async ({
                     total: res.data.total,
                     totalPages: res.data.totalPages
                 };
+                if (res.data.sentiment_stats) {
+                    sentimentStats = res.data.sentiment_stats;
+                }
             }
         } catch (error) {
             console.error("Error fetching articles server-side:", error);
@@ -53,7 +64,8 @@ const ArticleResultsPage = async ({
             <ArticleResultList 
                 articles={articles} 
                 meta={meta} 
-                searchId={searchId} 
+                searchId={searchId}
+                sentimentStats={sentimentStats}
             />
         </div>
     );

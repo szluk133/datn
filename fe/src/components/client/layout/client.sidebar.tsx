@@ -1,14 +1,17 @@
 'use client';
 
 import React, { useContext, useEffect, useState } from 'react';
-import { Layout, Menu, Spin, Empty, Typography, Tooltip, Button, Flex, theme } from 'antd';
+import { Layout, Menu, Spin, Empty, Typography, Tooltip, Button, Flex, theme, Badge } from 'antd';
 import { 
     HistoryOutlined,
     CalendarOutlined, 
     GlobalOutlined, 
     TagOutlined,
     PlusOutlined,
-    RightOutlined
+    MenuFoldOutlined,
+    MenuUnfoldOutlined,
+    SearchOutlined,
+    ClockCircleFilled
 } from '@ant-design/icons';
 import { useSession } from 'next-auth/react';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
@@ -127,99 +130,146 @@ const ClientSidebar = () => {
         router.push(`/model/article?id=${searchId}`);
     };
 
-    const menuItems: MenuProps['items'] = searchHistory.map((item) => {
+    const toggleCollapsed = () => {
+        setIsCollapsed(!isCollapsed);
+    };
+
+    const menuItems: MenuProps['items'] = searchHistory.map((item, index) => {
+        const isSelected = selectedMenuKey === item.search_id;
+        
+        const tagColors = ['#ff7a45', '#ffa940', '#73d13d', '#36cfc9', '#4096ff', '#9254de', '#f759ab'];
+        const accentColor = tagColors[index % tagColors.length];
+
         const labelContent = (
-            <Flex vertical gap={4} style={{ padding: '8px 0', overflow: 'hidden' }}>
-                
-                <Tooltip title={`${item.keyword_search} ${item.keyword_content ? `~ ${item.keyword_content}` : ''}`} placement="right">
-                    <Flex align="center" gap={6} style={{ width: '100%' }}>
-                        <TagOutlined style={{ color: token.colorPrimary, fontSize: 13, flexShrink: 0 }} />
-                        <Text strong ellipsis style={{ fontSize: 13, color: token.colorText, flex: 1 }}>
+            <Flex vertical gap={6} style={{ padding: '8px 4px', overflow: 'hidden' }}>
+                <Flex align="center" justify="space-between" style={{ width: '100%' }}>
+                    <Tooltip title={item.keyword_search} placement="right" mouseEnterDelay={0.5}>
+                        <Text strong ellipsis style={{ fontSize: 13, color: token.colorTextHeading, flex: 1 }}>
                             {item.keyword_search}
-                            {item.keyword_content && <span style={{ fontWeight: 'normal', color: token.colorTextSecondary }}> ~ {item.keyword_content}</span>}
                         </Text>
-                    </Flex>
-                </Tooltip>
+                    </Tooltip>
+                    {isSelected && <Badge status="processing" color={token.colorPrimary} />}
+                </Flex>
 
-                <Tooltip title={item.websites_crawled && item.websites_crawled.length > 0 ? item.websites_crawled.join(', ') : 'Tất cả website'} placement="right">
-                    <Flex align="center" gap={6} style={{ width: '100%' }}>
-                        <GlobalOutlined style={{ color: token.colorTextSecondary, fontSize: 12, flexShrink: 0 }} />
-                        <Text ellipsis style={{ fontSize: 12, color: token.colorTextSecondary, flex: 1 }}>
-                            {item.websites_crawled && item.websites_crawled.length > 0 ? item.websites_crawled.join(', ') : 'Tất cả website'}
-                        </Text>
-                    </Flex>
-                </Tooltip>
+                <div style={{ paddingLeft: 2 }}>
+                    <Flex vertical gap={4}>
+                        <Flex align="center" gap={8} style={{ width: '100%' }}>
+                            <TagOutlined style={{ fontSize: 11, color: accentColor }} />
+                            <Text ellipsis style={{ fontSize: 11, color: token.colorTextSecondary, flex: 1 }}>
+                                {item.keyword_content || "Không có từ khóa phụ"}
+                            </Text>
+                        </Flex>
 
-                <Tooltip title={item.time_range || 'Không rõ khoảng thời gian'} placement="right">
-                    <Flex align="center" gap={6} style={{ width: '100%' }}>
-                        <CalendarOutlined style={{ color: token.colorTextSecondary, fontSize: 12, flexShrink: 0 }} />
-                        <Text ellipsis style={{ fontSize: 12, color: token.colorTextSecondary, flex: 1 }}>
-                            {item.time_range && item.time_range.includes(' - ') ? 
-                                dayjs(item.time_range.split(' - ')[0], 'DD/MM/YYYY').format('DD/MM/YY') + ' - ' + dayjs(item.time_range.split(' - ')[1], 'DD/MM/YYYY').format('DD/MM/YY') 
-                                : (item.time_range || 'Không rõ')}
-                        </Text>
+                        <Flex align="center" gap={8} style={{ width: '100%' }}>
+                            <GlobalOutlined style={{ fontSize: 11, color: token.colorTextDescription }} />
+                            <Text ellipsis style={{ fontSize: 11, color: token.colorTextSecondary, flex: 1 }}>
+                                {item.websites_crawled && item.websites_crawled.length > 0 ? `${item.websites_crawled.length} nguồn` : 'Tất cả nguồn'}
+                            </Text>
+                        </Flex>
+
+                        <Flex align="center" gap={8} style={{ width: '100%' }}>
+                            <CalendarOutlined style={{ fontSize: 11, color: token.colorTextDescription }} />
+                            <Text ellipsis style={{ fontSize: 11, color: token.colorTextTertiary, flex: 1 }}>
+                                {dayjs(getItemTime(item)).format('DD/MM/YYYY HH:mm')}
+                            </Text>
+                        </Flex>
                     </Flex>
-                </Tooltip>
+                </div>
             </Flex>
         );
 
         return {
             key: item.search_id,
-            icon: <HistoryOutlined style={{ fontSize: 16, marginTop: 10 }} />, 
+            icon: (
+                <div style={{ 
+                    marginTop: 8, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    width: 32,
+                    height: 32,
+                    borderRadius: 10,
+                    background: isSelected ? token.colorPrimary : `rgba(255,255,255,0.5)`,
+                    color: isSelected ? '#fff' : accentColor,
+                    boxShadow: isSelected ? 'none' : `0 2px 6px ${accentColor}20`,
+                    transition: 'all 0.3s'
+                }}>
+                    <SearchOutlined style={{ fontSize: 16 }} />
+                </div>
+            ), 
             label: labelContent,
             onClick: () => handleHistoryClick(item.search_id),
+            className: `history-card-item ${isSelected ? 'selected' : ''}`,
             style: {
                 height: 'auto',
                 marginBottom: 8,
-                lineHeight: 1.5,
-                borderRadius: token.borderRadiusLG,
-                paddingLeft: 12 
+                borderRadius: 12,
+                paddingLeft: 12,
+                border: isSelected ? `1px solid ${token.colorPrimary}60` : '1px solid rgba(255,255,255,0.6)',
+                background: isSelected 
+                    ? '#ffffff' 
+                    : 'rgba(255, 255, 255, 0.6)', 
+                boxShadow: isSelected 
+                    ? `0 6px 16px -6px ${token.colorPrimary}40` 
+                    : 'none',
+                position: 'relative',
+                overflow: 'hidden',
+                transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)'
             }
         };
     });
 
     return (
         <Sider 
-            width={260} 
+            width={280} 
             theme="light" 
             style={{ 
-                borderRight: `1px solid ${token.colorBorderSecondary}`,
-                height: '100vh',
-                position: 'sticky',
-                top: 0,
-                left: 0,
-                zIndex: 10,
-                boxShadow: isCollapsed ? 'none' : token.boxShadowTertiary
+                borderRight: `1px solid rgba(0,0,0,0.06)`,
+                height: '100%', 
+                background: '#e6f7ff',
+                overflow: 'hidden'
             }}
             collapsible={true}
             collapsed={isCollapsed}
             onCollapse={(collapsed) => setIsCollapsed(collapsed)}
             collapsedWidth={80}
-            breakpoint="lg"
-            trigger={
-                <div style={{ 
-                    borderTop: `1px solid ${token.colorBorderSecondary}`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    height: 48
-                }}>
-                    {isCollapsed ? <RightOutlined /> : <span style={{ fontSize: 12 }}>Thu gọn</span>}
-                </div>
-            }
+            trigger={null} 
         >
             <Flex vertical style={{ height: '100%' }}>
-                <div style={{ padding: '20px 16px 16px', borderBottom: `1px solid ${token.colorBorderSecondary}` }}>
-                    <Flex align="center" justify={isCollapsed ? 'center' : 'start'} gap={10} style={{ marginBottom: isCollapsed ? 0 : 16 }}>
-                        <div style={{ 
-                            background: token.colorFillSecondary, 
-                            padding: 6, 
-                            borderRadius: 6, 
-                            display: 'flex' 
-                        }}>
-                            <HistoryOutlined style={{ fontSize: 18, color: token.colorPrimary }} />
-                        </div>
-                        {!isCollapsed && <Title level={5} style={{ margin: 0 }}>Lịch sử tìm kiếm</Title>}
+                <div style={{ 
+                    padding: '24px 16px 16px', 
+                    background: '#e6f7ff',
+                    flexShrink: 0,
+                    borderBottom: '1px solid rgba(5, 5, 5, 0.06)'
+                }}>
+                    <Flex align="center" justify="space-between" style={{ marginBottom: 20 }}>
+                        {!isCollapsed && (
+                            <Flex align="center" gap={10}>
+                                <div style={{ 
+                                    background: '#fff', 
+                                    padding: 8, 
+                                    borderRadius: 12, 
+                                    display: 'flex',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.05)'
+                                }}>
+                                    <ClockCircleFilled style={{ fontSize: 20, color: token.colorPrimary }} />
+                                </div>
+                                <Title level={5} style={{ margin: 0, fontSize: 18, color: token.colorTextHeading }}>Lịch sử</Title>
+                            </Flex>
+                        )}
+                        
+                        <Button 
+                            type="text" 
+                            shape="circle"
+                            icon={isCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />} 
+                            onClick={toggleCollapsed}
+                            style={{ 
+                                marginLeft: isCollapsed ? 'auto' : 0, 
+                                marginRight: isCollapsed ? 'auto' : 0,
+                                color: token.colorTextSecondary,
+                                background: 'rgba(255,255,255,0.5)'
+                            }}
+                        />
                     </Flex>
 
                     {!isCollapsed ? (
@@ -228,62 +278,119 @@ const ClientSidebar = () => {
                                 type="primary" 
                                 block 
                                 icon={<PlusOutlined />}
+                                size="large"
                                 style={{ 
-                                    background: `linear-gradient(135deg, ${token.colorPrimary}, ${token.colorPrimaryActive})`,
+                                    background: `linear-gradient(90deg, ${token.colorPrimary}, #096dd9)`,
                                     border: 'none',
-                                    height: 40,
-                                    fontWeight: 500,
-                                    boxShadow: token.boxShadow
+                                    height: 48,
+                                    fontSize: 15,
+                                    fontWeight: 600,
+                                    borderRadius: 14,
+                                    boxShadow: `0 8px 16px -4px ${token.colorPrimary}60`,
+                                    transition: 'all 0.3s'
                                 }}
+                                className="sidebar-action-btn"
                             >
-                                Tìm kiếm mới
+                                TÌM KIẾM MỚI
                             </Button>
                         </Link>
                     ) : (
-                        <Tooltip title="Tìm kiếm mới" placement="right">
+                        <Tooltip title="Tạo tìm kiếm mới" placement="right">
                             <Link href="/model/search">
                                 <Button 
                                     type="primary" 
                                     shape="circle" 
                                     icon={<PlusOutlined />} 
                                     size="large"
-                                    style={{ marginTop: 16 }}
+                                    style={{ 
+                                        display: 'flex', margin: '0 auto',
+                                        background: `linear-gradient(135deg, ${token.colorPrimary}, #096dd9)`,
+                                        border: 'none',
+                                        boxShadow: `0 4px 12px ${token.colorPrimary}50`
+                                    }}
                                 />
                             </Link>
                         </Tooltip>
                     )}
                 </div>
 
-                <div style={{ 
+                <div className="custom-scrollbar" style={{ 
                     flex: 1, 
                     overflowY: 'auto', 
-                    padding: '12px 8px',
+                    padding: '8px 12px',
                     scrollbarWidth: 'thin',
+                    height: '100%'
                 }}>
                     {isLoadingHistory ? (
-                        <Flex justify="center" align="center" style={{ height: 100 }}>
-                            <Spin size="small" />
-                                <span>Đang tải...</span>
+                        <Flex justify="center" align="center" style={{ height: 150, flexDirection: 'column', gap: 12 }}>
+                            <Spin size="default" />
+                            <Text type="secondary" style={{ fontSize: 13 }}>Đang tải lịch sử...</Text>
                         </Flex>
                     ) : searchHistory.length > 0 ? (
                         <Menu
                             mode="inline"
-                            style={{ border: 'none' }}
+                            style={{ 
+                                border: 'none', 
+                                background: 'transparent'
+                            }}
                             items={menuItems}
                             selectedKeys={selectedMenuKey ? [selectedMenuKey] : []} 
                         />
                     ) : (
-                        <div style={{ padding: '32px 16px', textAlign: 'center' }}>
+                        <div style={{ padding: '40px 16px', textAlign: 'center' }}>
                             {!isCollapsed && (
                                 <Empty 
                                     image={Empty.PRESENTED_IMAGE_SIMPLE} 
-                                    description={<Text type="secondary" style={{ fontSize: 13 }}>Chưa có lịch sử</Text>} 
+                                    description={<Text type="secondary" style={{ fontSize: 13 }}>Chưa có lịch sử tìm kiếm</Text>} 
                                 />
                             )}
                         </div>
                     )}
                 </div>
             </Flex>
+
+            <style jsx global>{`
+                /* Hiệu ứng hover cho thẻ item */
+                .history-card-item {
+                    margin-top: 0; 
+                }
+                
+                .history-card-item:hover {
+                    background: #bae7ff !important; /* MÀU NỀN ĐẬM HƠN (Xanh đậm) khi hover */
+                    transform: translateY(-2px);
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.1) !important;
+                    border-color: ${token.colorPrimary} !important;
+                    z-index: 1;
+                }
+
+                .sidebar-action-btn:hover {
+                    transform: translateY(-2px);
+                    box-shadow: 0 12px 20px -4px ${token.colorPrimary}80 !important;
+                }
+                
+                /* Tùy chỉnh thanh cuộn tinh tế hơn */
+                .custom-scrollbar::-webkit-scrollbar {
+                    width: 5px;
+                }
+                .custom-scrollbar::-webkit-scrollbar-track {
+                    background: transparent;
+                }
+                .custom-scrollbar::-webkit-scrollbar-thumb {
+                    background-color: rgba(0, 0, 0, 0.1);
+                    border-radius: 20px;
+                }
+                .custom-scrollbar:hover::-webkit-scrollbar-thumb {
+                    background-color: rgba(0, 0, 0, 0.2);
+                }
+                
+                .ant-menu-item-selected {
+                    background-color: transparent !important;
+                }
+                
+                .ant-menu-inline-collapsed > .ant-menu-item .ant-menu-item-title {
+                    display: none;
+                }
+            `}</style>
         </Sider>
     );
 };

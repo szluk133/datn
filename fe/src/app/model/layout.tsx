@@ -16,15 +16,18 @@ const ClientLayoutContent = ({ children }: { children: React.ReactNode }) => {
     const { view } = useChatbot();
 
     return (
-        <Layout style={{ height: '100vh', overflow: 'hidden' }}>
-            
-            <ClientHeader />
+        <Layout style={{ height: '100vh', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+            <div style={{ flex: '0 0 auto' }}>
+                <ClientHeader />
+            </div>
 
             <Layout
                 style={{
                     width: view === 'full' ? '50%' : '100%',
                     transition: 'width 0.3s ease-in-out',
-                    height: 'calc(100vh - 64px)', 
+                    flex: 1,
+                    overflow: 'hidden',
+                    position: 'relative'
                 }}
             >
                 <ClientSidebar />

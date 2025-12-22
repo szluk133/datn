@@ -1,4 +1,4 @@
-import { IsNotEmpty, IsString, IsOptional } from 'class-validator';
+import { IsNotEmpty, IsString, IsOptional, IsArray, IsNumber, IsDateString } from 'class-validator';
 
 export class CreateSavedArticleDto {
     @IsString()
@@ -11,9 +11,30 @@ export class CreateSavedArticleDto {
 
     @IsString()
     @IsOptional()
-    article_title?: string;
+    title?: string;
 
     @IsString()
     @IsOptional()
-    article_url?: string;
+    url?: string;
+
+    @IsArray()
+    @IsString({ each: true })
+    @IsOptional()
+    site_categories?: string[];
+
+    @IsString()
+    @IsOptional()
+    website?: string;
+
+    @IsString()
+    @IsOptional()
+    summary?: string;
+
+    @IsNumber()
+    @IsOptional()
+    ai_sentiment_score?: number;
+
+    @IsDateString()
+    @IsOptional()
+    publish_date?: string;
 }

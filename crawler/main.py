@@ -17,9 +17,19 @@ from database import (
     get_articles_collection, get_history_collection, get_topics_collection
 )
 from config import HEADERS, REQUEST_TIMEOUT, RETRY_COUNT
-from crawlers import CRAWLER_REGISTRY
+from crawlers.vnexpress_crawler import VnExpressCrawler
+from crawlers.vneconomy_crawler import VneconomyCrawler
+from crawlers.cafef_crawler import CafeFCrawler 
+
 from services.crawler_service import perform_hybrid_search, save_and_clean_history, search_relevant_articles_for_chat
 from services.scheduler_service import start_scheduler, execute_topic_crawl, reschedule_topic_crawl
+
+# [UPDATE] Registry
+CRAWLER_REGISTRY = {
+    "vnexpress.net": VnExpressCrawler,
+    "vneconomy.vn": VneconomyCrawler,
+    "cafef.vn": CafeFCrawler
+}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -50,12 +60,13 @@ async def retrieve_context(
 @app.post("/topics/init-from-html", summary="Init Topic & Trigger Crawl")
 async def init_topics(
     background_tasks: BackgroundTasks, 
-    website: str = Query(..., description="vneconomy.vn hoặc vnexpress.net"),
+    website: str = Query(..., description="vneconomy.vn, vnexpress.net, hoặc cafef.vn"),
     collection = Depends(get_topics_collection)
 ):
     target_url = ""
     if website == "vneconomy.vn": target_url = "https://vneconomy.vn"
     elif website == "vnexpress.net": target_url = "https://vnexpress.net"
+    elif website == "cafef.vn": target_url = "https://cafef.vn"
     else: raise HTTPException(400, "Website chưa được hỗ trợ.")
 
     try:
@@ -78,6 +89,7 @@ async def init_topics(
                 if not href.startswith('http'): href = "https://vneconomy.vn" + href if href.startswith('/') else "https://vneconomy.vn/" + href
                 if ".htm" in href and href not in seen_urls and len(href.split('/')) <= 5:
                     topics.append({'name': title.strip(), 'url': href, 'website': website}); seen_urls.add(href)
+    
     elif website == "vnexpress.net":
         items = soup.select('a[data-medium^="Menu-"], .ul-nav-folder a, nav a')
         for item in items:
@@ -87,6 +99,24 @@ async def init_topics(
                 if href in seen_urls: continue
                 if ".html" not in href and "video" not in href and "podcast" not in href:
                     topics.append({'name': title.strip(), 'url': href, 'website': website}); seen_urls.add(href)
+    
+    elif website == "cafef.vn":
+        menu_wrap = soup.select_one('#menu_wrap')
+        if menu_wrap:
+            items = menu_wrap.select('li a')
+            for item in items:
+                title = item.get('title') or item.text.strip()
+                href = item.get('href')
+                if not title or title.lower() == "trang chủ": continue
+                if title.lower() == "chứng khoán": title = "Thị trường chứng khoán"
+                elif title.lower() == "ngân hàng": title = "Tài chính ngân hàng"
+                elif title.lower() == "vĩ mô": title = "Kinh tế vĩ mô - Đầu tư"
+                if href:
+                    if not href.startswith('http'): 
+                        href = "https://cafef.vn" + href if href.startswith('/') else "https://cafef.vn/" + href
+                    if href not in seen_urls:
+                        topics.append({'name': title, 'url': href, 'website': website})
+                        seen_urls.add(href)
 
     count = 0
     for t in topics:
@@ -99,13 +129,29 @@ async def init_topics(
 @app.post("/admin/auto-crawl/{website}", summary="Kích hoạt Auto-Crawl theo Website cụ thể")
 async def trigger_specific_site_crawl(
     background_tasks: BackgroundTasks,
-    website: str = Path(..., description="Chọn: vnexpress.net hoặc vneconomy.vn")
+    website: str = Path(..., description="Chọn: vnexpress.net, vneconomy.vn, cafef.vn")
 ):
-    allowed_sites = ["vnexpress.net", "vneconomy.vn"]
+    allowed_sites = ["vnexpress.net", "vneconomy.vn", "cafef.vn"]
     if website not in allowed_sites:
-        raise HTTPException(status_code=400, detail=f"Website '{website}' không hợp lệ. Chỉ hỗ trợ: {allowed_sites}")
+        raise HTTPException(status_code=400, detail=f"Website '{website}' không hợp lệ.")
     background_tasks.add_task(execute_topic_crawl, website)
     return {"status": "triggered", "target": website, "message": f"Đã bắt đầu tiến trình crawl tự động cho {website}."}
+
+# [UPDATE] Test API riêng cho CafeF với tham số force_days_back=60
+@app.post("/test/cafef-auto-crawl", summary="[TEST] Trigger CafeF Auto Crawl (2 tháng)")
+async def test_cafef_auto_crawl(background_tasks: BackgroundTasks):
+    """
+    API Test: Kích hoạt crawl cho cafef.vn với chế độ ép buộc lấy dữ liệu 2 tháng gần nhất.
+    (Bỏ qua mốc thời gian crawl lần trước)
+    """
+    print("[TEST API] Kích hoạt auto crawl cho cafef.vn (FORCE 60 DAYS)...")
+    # Truyền force_days_back=60
+    background_tasks.add_task(execute_topic_crawl, "cafef.vn", 60)
+    return {
+        "status": "success",
+        "message": "Background task initiated for 'cafef.vn' with 60 days lookback.",
+        "target": "cafef.vn"
+    }
 
 @app.post("/admin/schedule", summary="Cập nhật tần suất Auto-Crawl")
 async def update_schedule(config: ScheduleConfig):
@@ -122,10 +168,11 @@ async def start_crawl(
 ):
     search_id = datetime.datetime.now().strftime("%Y%m%d%H%M%S") + f"_{params.user_id}"
     crawlers_map = {}
-    sites = params.websites if params.websites else ["vneconomy.vn", "vnexpress.net"]
+    sites = params.websites if params.websites else ["vneconomy.vn", "vnexpress.net", "cafef.vn"]
+    
     for name in sites:
-        if name == "vneconomy.vn": crawlers_map[name] = CRAWLER_REGISTRY["vneconomy.vn"](None)
-        elif name == "vnexpress.net": crawlers_map[name] = CRAWLER_REGISTRY["vnexpress.net"](None)
+        if name in CRAWLER_REGISTRY:
+            crawlers_map[name] = CRAWLER_REGISTRY[name](None)
     
     total_existing, status, bg_task_func = await perform_hybrid_search(params, crawlers_map, search_id)
     
@@ -138,9 +185,9 @@ async def start_crawl(
         0, total_existing, f"{params.start_date}-{params.end_date}", status
     )
     
-    
     return {
         "status": status,
+        "search_id": search_id,
         "search_id": search_id,
         "meta": {
             "total_available_now": total_existing,
@@ -157,44 +204,26 @@ async def stream_crawl_status(
     history_collection = Depends(get_history_collection),
     articles_collection = Depends(get_articles_collection)
 ):
-    """
-    Server-Sent Events endpoint.
-    Client kết nối vào đây để nhận update realtime thay vì polling.
-    """
     async def event_generator():
         last_count = -1
         last_status = ""
-        
         while True:
             if await request.is_disconnected(): break
-
             history_doc = await history_collection.find_one({'search_id': search_id})
-            
             current_count = await articles_collection.count_documents({'search_id': search_id})
-            
             status = history_doc.get("status", "unknown") if history_doc else "unknown"
             
             if current_count != last_count or status != last_status:
                 data = {
-                    "search_id": search_id,
-                    "status": status,
-                    "total_saved": current_count,
-                    "timestamp": datetime.datetime.now().isoformat()
+                    "search_id": search_id, "status": status,
+                    "total_saved": current_count, "timestamp": datetime.datetime.now().isoformat()
                 }
-                yield {
-                    "event": "update",
-                    "data": json.dumps(data)
-                }
-                last_count = current_count
-                last_status = status
+                yield {"event": "update", "data": json.dumps(data)}
+                last_count = current_count; last_status = status
             
             if status == "completed":
-                yield {
-                    "event": "end",
-                    "data": json.dumps({"message": "Crawl completed", "final_count": current_count})
-                }
+                yield {"event": "end", "data": json.dumps({"message": "Crawl completed", "final_count": current_count})}
                 break
-            
             await asyncio.sleep(2)
 
     return EventSourceResponse(event_generator())

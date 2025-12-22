@@ -11,6 +11,7 @@ import dayjs from 'dayjs';
 import type { TableProps } from 'antd/es/table';
 import type { SorterResult } from 'antd/es/table/interface';
 import Link from 'next/link';
+import BookmarkButton from '@/components/client/article/bookmark.btn';
 
 const { Option } = Select;
 const { RangePicker } = DatePicker;
@@ -296,6 +297,31 @@ const SearchClient = (props: IProps) => {
                     </Tag>
                 ) : <span style={{ color: '#ccc' }}>N/A</span>;
             }
+        },
+        {
+            title: '',
+            key: 'action',
+            width: 50,
+            fixed: 'right' as const,
+            render: (_: any, record: any) => {
+                const articleId = record.article_id || record.id || record._id;
+                return (
+                    <div className="row-action">
+                        <BookmarkButton 
+                            articleId={articleId} 
+                            articleTitle={record.title}
+                            articleUrl={record.url}
+                            website={record.website}
+                            siteCategories={record.site_categories}
+                            summary={record.summary}
+                            aiSentimentScore={record.ai_sentiment_score}
+                            publishDate={record.publish_date}
+                            size="middle"
+                            type="text"
+                        />
+                    </div>
+                );
+            }
         }
     ];
 
@@ -432,7 +458,18 @@ const SearchClient = (props: IProps) => {
                 scroll={{ x: 1000 }}
                 size="small"
                 locale={{ emptyText: <Empty description="Không tìm thấy bài báo nào" /> }}
+                rowClassName="article-row"
             />
+
+            <style jsx global>{`
+                .article-row .row-action {
+                    opacity: 0;
+                    transition: opacity 0.2s ease-in-out;
+                }
+                .article-row:hover .row-action {
+                    opacity: 1;
+                }
+            `}</style>
         </Card>
     );
 };

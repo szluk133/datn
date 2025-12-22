@@ -7,6 +7,22 @@ from config import CHUNK_SIZE_CHARS
 def parse_vietnamese_date(date_str: str) -> Optional[datetime.datetime]:
     date_str = date_str.strip()
     try:
+        date_str = date_str.replace('|', '').strip()
+
+        match_cafef = re.search(r'(\d{2}-\d{2}-\d{4})\s*-\s*(\d{2}:\d{2})\s*(AM|PM)?', date_str, re.IGNORECASE)
+        if match_cafef:
+            d_part = match_cafef.group(1)
+            t_part = match_cafef.group(2)
+            ampm = match_cafef.group(3)
+            
+            dt_str = f"{d_part} {t_part}"
+            fmt = '%d-%m-%Y %H:%M'
+            if ampm:
+                dt_str += f" {ampm}"
+                fmt += " %p"
+                
+            return datetime.datetime.strptime(dt_str, fmt)
+
         match_vnexpress = re.search(r'(\d{1,2}/\d{1,2}/\d{4}), (\d{1,2}:\d{2})', date_str)
         if match_vnexpress:
             date_part = match_vnexpress.group(1)
@@ -15,6 +31,9 @@ def parse_vietnamese_date(date_str: str) -> Optional[datetime.datetime]:
 
         if re.match(r'\d{1,2}/\d{1,2}/\d{4}, \d{1,2}:\d{2}', date_str):
             return datetime.datetime.strptime(date_str, '%d/%m/%Y, %H:%M')
+            
+        if re.match(r'\d{2}-\d{2}-\d{4} \d{2}:\d{2}', date_str):
+            return datetime.datetime.strptime(date_str, '%d-%m-%Y %H:%M')
 
         match_short = re.search(r'(\d{1,2}/\d{1,2}/\d{4})', date_str)
         if match_short:

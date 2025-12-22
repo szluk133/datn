@@ -1,5 +1,5 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-import { Document, Schema as MongooseSchema } from 'mongoose';
+import { Document } from 'mongoose';
 
 export type SavedArticleDocument = SavedArticle & Document;
 
@@ -12,10 +12,25 @@ export class SavedArticle {
     article_id: string;
 
     @Prop()
-    article_title: string;
+    title: string;
 
     @Prop()
-    article_url: string;
+    url: string;
+
+    @Prop({ type: [String], default: [] })
+    site_categories: string[];
+
+    @Prop()
+    website: string;
+
+    @Prop()
+    summary: string;
+
+    @Prop()
+    ai_sentiment_score: number;
+
+    @Prop({ type: Date })
+    publish_date: Date;
 }
 
 export const SavedArticleSchema = SchemaFactory.createForClass(SavedArticle);

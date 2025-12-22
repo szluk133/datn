@@ -10,13 +10,23 @@ interface IBookmarkProps {
     articleId: string;
     articleTitle?: string;
     articleUrl?: string;
+    website?: string;
+    siteCategories?: string[];
+    summary?: string;
+    aiSentimentScore?: number;
+    publishDate?: string;
     size?: 'small' | 'middle' | 'large';
     shape?: 'circle' | 'default' | 'round';
     type?: 'text' | 'link' | 'default' | 'primary' | 'dashed';
 }
 
 const BookmarkButton = (props: IBookmarkProps) => {
-    const { articleId, articleTitle, articleUrl, size = 'middle', shape, type = 'text' } = props;
+    const { 
+        articleId, articleTitle, articleUrl, 
+        website, siteCategories, summary, aiSentimentScore, publishDate,
+        size = 'middle', shape, type = 'text' 
+    } = props;
+    
     const { data: session, status } = useSession();
     
     const [isSaved, setIsSaved] = useState<boolean>(false);
@@ -72,15 +82,22 @@ const BookmarkButton = (props: IBookmarkProps) => {
                     notification.success({ title: "Đã bỏ lưu bài viết" });
                 }
             } else {
+                const payload = {
+                    user_id: session.user._id,
+                    article_id: articleId,
+                    title: articleTitle,
+                    url: articleUrl,
+                    website: website || "N/A",
+                    site_categories: siteCategories || [],
+                    summary: summary || "",
+                    ai_sentiment_score: aiSentimentScore || 0,
+                    publish_date: publishDate || new Date().toISOString()
+                };
+
                 const res = await sendRequest<any>({
                     url: `${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/saved-articles`,
                     method: 'POST',
-                    body: {
-                        article_id: articleId,
-                        article_title: articleTitle,
-                        article_url: articleUrl,
-                        user_id: session.user._id
-                    },
+                    body: payload,
                     session: session,
                 });
                 

@@ -130,33 +130,37 @@ class VneconomyCrawler(BaseCrawler):
             
             soup = BeautifulSoup(resp.text, 'html.parser')
             
-            if len(soup.select('.story-item')) > 5 and not soup.select_one('.detail-content'):
-                return None
+            # [FIX] Đã XÓA đoạn check heuristic gây lỗi (len(story-item) > 5...)
+            # Thay vào đó, tập trung tìm nội dung chính luôn.
 
             sapo = soup.select_one('.news-sapo, .sapo, .detail-sapo')
             sapo_text = sapo.text.strip() if sapo else ""
             
+            # Mở rộng selector cho Body
             body = soup.select_one('div[data-field="body"]') or \
                 soup.select_one('.detail-content') or \
                 soup.select_one('.content-detail') or \
                 soup.select_one('.multimedia-content') or \
-                soup.select_one('article.post-content')
+                soup.select_one('article.post-content') or \
+                soup.select_one('.fck_detail')
             
             if body:
-                for trash in body.select('.box-dautu, .related-news, table'):
+                for trash in body.select('.box-dautu, .related-news, table, .relate-container'):
                     trash.decompose()
                 content_text = "\n".join([p.text.strip() for p in body.find_all('p') if p.text.strip()])
             else:
                 content_text = ""
 
+            # Fallback nếu không tìm thấy body chuẩn
             if not content_text: 
                 main_tag = soup.select_one('main') or soup.select_one('body')
                 if main_tag:
                     ps = main_tag.select('p')
-                    content_text = "\n".join([p.text.strip() for p in ps if len(p.text.strip()) > 20])
+                    content_text = "\n".join([p.text.strip() for p in ps if len(p.text.strip()) > 30])
                     if len(content_text) > 5000: content_text = content_text[:5000]
 
-            if not content_text: return None
+            if not content_text or len(content_text) < 50: 
+                return None
 
             content_text = "\n".join([line.strip() for line in content_text.splitlines() if line.strip()])
 
@@ -183,10 +187,6 @@ class VneconomyCrawler(BaseCrawler):
                 if header_sec:
                     main_cat = header_sec.select_one('.title-header-section-dt .title, h1.title')
                     if main_cat: cats.append(main_cat.text.strip())
-                    sub_cats = header_sec.select('a.text-header-dt')
-                    for sc in sub_cats:
-                        txt = sc.text.strip()
-                        if txt and txt not in cats: cats.append(txt)
             
             if not cats:
                 breadcrumb_links = soup.select('.breadcrumb li a, .breadcrumb-item a, ul.breadcrumb a')

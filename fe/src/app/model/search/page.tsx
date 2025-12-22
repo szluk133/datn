@@ -48,7 +48,7 @@ const SearchPage = () => {
                                 WebkitBackgroundClip: 'text',
                                 WebkitTextFillColor: 'transparent'
                             }}>
-                                Crawler
+                                Công cụ tìm kiếm nâng cao
                             </span>
                         </Title>
                         <Text type="secondary" style={{ fontSize: 18, maxWidth: 600, display: 'inline-block' }}>

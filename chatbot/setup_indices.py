@@ -39,15 +39,16 @@ def setup_qdrant_indices():
         )
         logger.info(f" Đã tạo mới collection với size {REQUIRED_VECTOR_SIZE}.")
 
+    # [UPDATE] Chỉ tạo Index cho các trường Root quan trọng
     indices_config = [
         {"field": "type", "schema": models.PayloadSchemaType.KEYWORD},
         {"field": "article_id", "schema": models.PayloadSchemaType.KEYWORD},
         {"field": "search_id", "schema": models.PayloadSchemaType.KEYWORD},
+        
+        # ROOT Level Filters (Updated)
         {"field": "website", "schema": models.PayloadSchemaType.KEYWORD},
-        {"field": "metadata.website", "schema": models.PayloadSchemaType.KEYWORD},
-        {"field": "publish_date", "schema": models.PayloadSchemaType.DATETIME},
-        {"field": "metadata.publish_date", "schema": models.PayloadSchemaType.DATETIME},
         {"field": "topic", "schema": models.PayloadSchemaType.KEYWORD},
+        {"field": "publish_date", "schema": models.PayloadSchemaType.DATETIME},
         {"field": "sentiment", "schema": models.PayloadSchemaType.FLOAT},
     ]
 

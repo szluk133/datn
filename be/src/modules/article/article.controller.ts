@@ -55,6 +55,19 @@ export class ArticleController {
     this.sendExcelResponse(res, buffer, `Export_Search_${searchId}.xlsx`);
   }
 
+  @Get('export/word/:articleId')
+  async exportArticleWord(
+    @Param('articleId') articleId: string,
+    @Res() res: Response,
+  ) {
+    this.logger.log(`API [GET /article/export/word/:articleId] - ID: ${articleId}`);
+    const buffer = await this.articleService.exportArticleToWord(articleId);
+    
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+    res.setHeader('Content-Disposition', `attachment; filename=Article_${articleId}.docx`);
+    res.send(buffer);
+  }
+  
   //EXPORT SELECTED
   @Post('export/selected')
   @UsePipes(new ValidationPipe({ transform: true }))

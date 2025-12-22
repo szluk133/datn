@@ -15,6 +15,7 @@ import { Buffer } from 'buffer';
 import { SearchResponseDto } from './dto/search-response.dto';
 import { MeiliSearchService } from '../common/meilisearch/meilisearch.service';
 import { SystemLogService } from '../common/SystemLog/system-loc.service';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel, AlignmentType, UnderlineType, BorderStyle } from 'docx';
 
 interface CrawlApiResponse {
     status: string; // 'completed' | 'processing'
@@ -199,7 +200,38 @@ export class ArticleService {
             {
                 $facet: {
                     metadata: [{ $count: "total" }],
-                    data: [{ $skip: skip }, { $limit: limit }]
+                    data: [{ $skip: skip }, { $limit: limit }],
+                    stats: [
+                        {
+                            $group: {
+                                _id: null,
+                                positive: { 
+                                    $sum: { 
+                                        $cond: [{ $gt: ["$ai_sentiment_score", 0.25] }, 1, 0] 
+                                    } 
+                                },
+                                negative: { 
+                                    $sum: { 
+                                        $cond: [{ $lt: ["$ai_sentiment_score", -0.25] }, 1, 0] 
+                                    } 
+                                },
+                                neutral: { 
+                                    $sum: { 
+                                        $cond: [
+                                            { $or: [
+                                                { $and: [
+                                                    { $gte: ["$ai_sentiment_score", -0.25] },
+                                                    { $lte: ["$ai_sentiment_score", 0.25] }
+                                                ]},
+                                                { $eq: ["$ai_sentiment_score", null] },
+                                                { $eq: ["$ai_sentiment_score", undefined] }
+                                            ]}, 1, 0
+                                        ] 
+                                    } 
+                                }
+                            }
+                        }
+                    ]
                 }
             }
         ];
@@ -208,6 +240,7 @@ export class ArticleService {
         
         const total = result.metadata[0]?.total || 0;
         const articles = result.data || [];
+        const statsRaw = result.stats[0] || { positive: 0, negative: 0, neutral: 0 };
         const totalPages = Math.ceil(total / limit);
 
         const data = articles.map(article => ({
@@ -222,7 +255,18 @@ export class ArticleService {
             site_categories: article.site_categories || [],
         }));
 
-        return { data, total, page, limit, totalPages };
+        return { 
+            data, 
+            total, 
+            page, 
+            limit, 
+            totalPages,
+            sentiment_stats: {
+                positive: statsRaw.positive || 0,
+                negative: statsRaw.negative || 0,
+                neutral: statsRaw.neutral || 0
+            }
+        };
     }
 
     async getSearchHistoryByUserId(userId: string): Promise<SearchHistoryResponseDto[]> {
@@ -270,6 +314,139 @@ export class ArticleService {
         return this.generateExcelBuffer(articles);
     }
 
+    async exportArticleToWord(identifier: string): Promise<Buffer> {
+        const article = await this.getArticleDetailById(identifier);
+
+        let formattedDate = article.publish_date;
+        try {
+            const dateObj = new Date(article.publish_date);
+            if (!isNaN(dateObj.getTime())) {
+                formattedDate = dateObj.toLocaleDateString('vi-VN', { 
+                    day: '2-digit', 
+                    month: '2-digit', 
+                    year: 'numeric' 
+                });
+            }
+        } catch (e) {
+        }
+
+        const contentParagraphs = article.content
+            ? article.content.split('\n')
+                .filter(line => line.trim().length > 0)
+                .map(line => new Paragraph({
+                    children: [
+                        new TextRun({ 
+                            text: line.trim(),
+                            size: 24,
+                            font: "Times New Roman"
+                        })
+                    ],
+                    alignment: AlignmentType.JUSTIFIED,
+                    spacing: { after: 200, line: 360 }
+                }))
+            : [new Paragraph({ text: "(Không có nội dung chi tiết)" })];
+
+        const doc = new Document({
+            sections: [{
+                properties: {},
+                children: [
+                    new Paragraph({
+                        children: [
+                            new TextRun({ 
+                                text: article.title.toUpperCase(), 
+                                bold: true, 
+                                size: 32,
+                                font: "Times New Roman",
+                                color: "2E74B5"
+                            })
+                        ],
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 200 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({ 
+                                text: `Nguồn: ${article.website}`, 
+                                bold: true, 
+                                size: 20,
+                                font: "Times New Roman"
+                            }),
+                            new TextRun({ 
+                                text: `  |  Ngày xuất bản: ${formattedDate}`, 
+                                italics: true, 
+                                size: 20,
+                                font: "Times New Roman"
+                            }),
+                        ],
+                        alignment: AlignmentType.CENTER,
+                        border: {
+                            bottom: { style: BorderStyle.SINGLE, size: 6, space: 10, color: "CCCCCC" }
+                        },
+                        spacing: { after: 400 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({ 
+                                text: "Tóm tắt: ", 
+                                bold: true, 
+                                size: 24,
+                                font: "Times New Roman"
+                            }),
+                            new TextRun({ 
+                                text: article.summary, 
+                                italics: true, 
+                                size: 24,
+                                font: "Times New Roman"
+                            })
+                        ],
+                        alignment: AlignmentType.JUSTIFIED,
+                        spacing: { after: 400 },
+                        indent: { left: 720, right: 720 }
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({ 
+                                text: "Nội dung chi tiết", 
+                                bold: true, 
+                                size: 26, 
+                                underline: { type: UnderlineType.SINGLE },
+                                font: "Times New Roman"
+                            })
+                        ],
+                        heading: HeadingLevel.HEADING_1,
+                        spacing: { after: 200 }
+                    }),
+
+                    ...contentParagraphs,
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({ 
+                                text: "Xem bài viết gốc: ", 
+                                bold: true,
+                                size: 20,
+                                font: "Times New Roman"
+                            }),
+                            new TextRun({ 
+                                text: article.url, 
+                                color: "0563C1", 
+                                underline: { type: UnderlineType.SINGLE },
+                                size: 20,
+                                font: "Times New Roman"
+                            })
+                        ],
+                        spacing: { before: 400 }
+                    })
+                ],
+            }],
+        });
+
+        return await Packer.toBuffer(doc);
+    }
+    
     private async generateExcelBuffer(articles: ArticleDocument[]): Promise<Buffer> {
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'ArticleService';

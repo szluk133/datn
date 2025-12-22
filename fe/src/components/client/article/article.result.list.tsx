@@ -4,13 +4,13 @@ import React, { useEffect, useState, useRef, useMemo, useContext } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { 
     Breadcrumb, Empty, Button, Pagination, notification, Checkbox, 
-    Space, Badge, Typography, Spin, Select, Card, Row, Col, Statistic, Progress, Flex, theme, Avatar, Tooltip, Tag
+    Space, Badge, Typography, Spin, Select, Card, Row, Col, Progress, Flex, theme, Avatar, Tooltip, Tag, Divider
 } from 'antd';
 import { 
-    HomeOutlined, ReadOutlined, FileExcelOutlined, LoadingOutlined, 
-    SortAscendingOutlined, SortDescendingOutlined,
+    HomeOutlined, FileExcelOutlined, LoadingOutlined, 
     PieChartOutlined, DatabaseOutlined, SyncOutlined,
-    GlobalOutlined, ThunderboltFilled, CheckCircleFilled, FilterOutlined
+    GlobalOutlined, ThunderboltFilled, FilterOutlined,
+    BarChartOutlined
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
@@ -19,8 +19,10 @@ import ArticleItem from '@/components/client/article/article.item';
 import { useChatbot } from '@/components/client/chatbot/chatbot.context';
 import { sendRequest } from '@/utils/api';
 import { ClientContext } from '@/components/client/layout/client.context';
+import { SentimentStats } from '@/app/model/article/page'; 
+import dayjs from 'dayjs';
 
-const { Text, Title, Paragraph } = Typography;
+const { Text, Title } = Typography;
 
 interface IProps {
     articles: IArticle[];
@@ -31,6 +33,7 @@ interface IProps {
         totalPages: number;
     };
     searchId: string | null;
+    sentimentStats?: SentimentStats;
 }
 
 interface ISSEData {
@@ -46,52 +49,162 @@ interface IArticleHistoryResponse {
     page: number;
     limit: number;
     totalPages: number;
+    sentiment_stats?: SentimentStats;
 }
 
-const StatCard = ({ title, value, icon, color, subTitle }: { title: string, value: number | string, icon: React.ReactNode, color: string, subTitle?: React.ReactNode }) => {
-    const { token } = theme.useToken();
+// --- Components Thống kê được nâng cấp ---
+
+const StatCard = ({ title, value, icon, gradient, subTitle }: { title: string, value: number | string, icon: React.ReactNode, gradient: string, subTitle?: React.ReactNode }) => {
     return (
         <Card 
-            variant="borderless" 
+            variant="borderless"
             style={{ 
                 height: '100%', 
-                background: token.colorBgContainer,
-                boxShadow: token.boxShadowTertiary,
-                borderRadius: 16,
+                background: '#fff',
+                boxShadow: '0 10px 30px -10px rgba(0,0,0,0.05)',
+                borderRadius: 24,
                 position: 'relative',
-                overflow: 'hidden'
+                overflow: 'hidden',
+                transition: 'transform 0.3s ease, box-shadow 0.3s ease'
             }}
-            styles={{ body: { padding: '20px 24px' } }}
+            hoverable
+            styles={{ body: { padding: '24px' } }}
         >
+            {/* Background decoration */}
             <div style={{ 
-                position: 'absolute', top: -10, right: -10, 
-                opacity: 0.1, transform: 'rotate(15deg)', 
-                fontSize: 80, color: color 
-            }}>
-                {icon}
-            </div>
-            <Flex vertical gap={8}>
-                <Flex align="center" gap={8}>
+                position: 'absolute', top: -20, right: -20, 
+                width: 120, height: 120, borderRadius: '50%',
+                background: gradient, opacity: 0.1, filter: 'blur(20px)'
+            }} />
+            
+            <Flex vertical gap={12} style={{ position: 'relative', zIndex: 1 }}>
+                <Flex align="center" gap={12}>
                     <div style={{ 
-                        padding: 8, borderRadius: '50%', 
-                        background: `${color}22`, color: color,
-                        display: 'flex' 
+                        padding: 10, borderRadius: 14, 
+                        background: gradient, color: '#fff',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
                     }}>
-                        {React.cloneElement(icon as React.ReactElement<any>, { style: { fontSize: 18 } })}
+                        {React.cloneElement(icon as React.ReactElement<any>, { style: { fontSize: 20 } })}
                     </div>
-                    <Text type="secondary" style={{ fontSize: 13, fontWeight: 500, textTransform: 'uppercase' }}>{title}</Text>
+                    <Text type="secondary" style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>{title}</Text>
                 </Flex>
-                <Title level={2} style={{ margin: 0, color: token.colorTextHeading }}>
-                    {value}
-                </Title>
-                {subTitle && <div style={{ marginTop: 4 }}>{subTitle}</div>}
+                <div>
+                    <Title level={2} style={{ margin: 0, fontWeight: 700, fontSize: 36 }}>
+                        {value}
+                    </Title>
+                    {subTitle && <div style={{ marginTop: 8 }}>{subTitle}</div>}
+                </div>
             </Flex>
         </Card>
     );
 };
 
+const SourceStatCard = ({ sources }: { sources: string[] }) => {
+    const gradient = "linear-gradient(135deg, #13c2c2, #36cfc9)";
+    
+    return (
+        <Card 
+            variant="borderless"
+            style={{ 
+                height: '100%', 
+                background: '#fff',
+                boxShadow: '0 10px 30px -10px rgba(0,0,0,0.05)',
+                borderRadius: 24,
+                position: 'relative',
+                overflow: 'hidden'
+            }}
+            hoverable
+            styles={{ body: { padding: '24px' } }}
+        >
+            <div style={{ 
+                position: 'absolute', bottom: -30, right: -20, 
+                fontSize: 120, color: '#13c2c2', opacity: 0.05
+            }}>
+                <GlobalOutlined />
+            </div>
+
+            <Flex vertical gap={16} style={{ height: '100%' }}>
+                <Flex align="center" gap={12}>
+                    <div style={{ 
+                        padding: 10, borderRadius: 14, 
+                        background: gradient, color: '#fff',
+                        display: 'flex', boxShadow: '0 4px 12px rgba(19, 194, 194, 0.3)'
+                    }}>
+                        <GlobalOutlined style={{ fontSize: 20 }} />
+                    </div>
+                    <Text type="secondary" style={{ fontSize: 13, fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                        Nguồn tin ({sources.length})
+                    </Text>
+                </Flex>
+                
+                <div style={{ flex: 1, overflowY: 'auto', paddingRight: 4 }} className="custom-scrollbar">
+                    {sources.length > 0 ? (
+                        <Flex wrap="wrap" gap={8}>
+                            {sources.map((source, idx) => (
+                                <Tag key={idx} style={{ 
+                                    margin: 0, padding: '4px 10px', borderRadius: 8, border: 'none',
+                                    background: '#e6fffb', color: '#006d75', fontSize: 13
+                                }}>
+                                    {source}
+                                </Tag>
+                            ))}
+                        </Flex>
+                    ) : (
+                        <Flex justify="center" align="center" style={{ height: '100%' }}>
+                            <Text type="secondary" italic>Đang cập nhật...</Text>
+                        </Flex>
+                    )}
+                </div>
+            </Flex>
+        </Card>
+    );
+};
+
+const SentimentSection = ({ 
+    title, stats, icon, color, token
+}: { 
+    title: string, stats: { positive: number, negative: number, neutral: number }, icon: React.ReactNode, color: string, token: any
+}) => {
+    const total = stats.positive + stats.negative + stats.neutral || 1;
+    const posPercent = (stats.positive / total) * 100;
+    const neuPercent = (stats.neutral / total) * 100;
+    const negPercent = (stats.negative / total) * 100;
+
+    return (
+        <div style={{ width: '100%' }}>
+            <Flex align="center" gap={8} style={{ marginBottom: 12 }}>
+                <div style={{ color: color }}>{icon}</div>
+                <Text style={{ fontSize: 14, fontWeight: 600, color: token.colorTextHeading }}>{title}</Text>
+            </Flex>
+            
+            <Flex vertical gap={10}>
+                <div style={{ 
+                    display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden',
+                    boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.1)'
+                }}>
+                    <Tooltip title={`Tích cực: ${stats.positive} (${posPercent.toFixed(1)}%)`}>
+                        <div style={{ width: `${posPercent}%`, background: token.colorSuccess, transition: 'width 1s ease-in-out' }} />
+                    </Tooltip>
+                    <Tooltip title={`Trung tính: ${stats.neutral} (${neuPercent.toFixed(1)}%)`}>
+                        <div style={{ width: `${neuPercent}%`, background: token.colorWarning, transition: 'width 1s ease-in-out' }} />
+                    </Tooltip>
+                    <Tooltip title={`Tiêu cực: ${stats.negative} (${negPercent.toFixed(1)}%)`}>
+                        <div style={{ width: `${negPercent}%`, background: token.colorError, transition: 'width 1s ease-in-out' }} />
+                    </Tooltip>
+                </div>
+                <Flex justify="space-between" style={{ fontSize: 12 }}>
+                    <Badge color={token.colorSuccess} text={<span style={{ color: token.colorTextSecondary }}>Tích cực: <b>{stats.positive}</b></span>} />
+                    <Badge color={token.colorWarning} text={<span style={{ color: token.colorTextSecondary }}>Trung tính: <b>{stats.neutral}</b></span>} />
+                    <Badge color={token.colorError} text={<span style={{ color: token.colorTextSecondary }}>Tiêu cực: <b>{stats.negative}</b></span>} />
+                </Flex>
+            </Flex>
+        </div>
+    );
+};
+
 const ArticleResultList = (props: IProps) => {
-    const { articles: initialArticles, meta: initialMeta, searchId } = props;
+    const { articles: initialArticles, meta: initialMeta, searchId, sentimentStats: initialStats } = props;
     const { data: session } = useSession();
     const { token } = theme.useToken();
     const router = useRouter();
@@ -103,6 +216,8 @@ const ArticleResultList = (props: IProps) => {
 
     const [localArticles, setLocalArticles] = useState<IArticle[]>(initialArticles || []);
     const [localMeta, setLocalMeta] = useState(initialMeta || { current: 1, pageSize: 5, total: 0, totalPages: 0 });
+    const [localStats, setLocalStats] = useState<SentimentStats | undefined>(initialStats);
+    
     const [isProcessing, setIsProcessing] = useState<boolean>(true);
     const [streamMessage, setStreamMessage] = useState<string>("Đang khởi tạo kết nối...");
     const [selectedRowKeys, setSelectedRowKeys] = useState<Set<string>>(new Set());
@@ -124,7 +239,8 @@ const ArticleResultList = (props: IProps) => {
     useEffect(() => {
         if (initialArticles) setLocalArticles(initialArticles);
         if (initialMeta) setLocalMeta(initialMeta);
-    }, [initialArticles, initialMeta]);
+        if (initialStats) setLocalStats(initialStats);
+    }, [initialArticles, initialMeta, initialStats]);
 
     useEffect(() => {
         if (searchId) {
@@ -143,18 +259,25 @@ const ArticleResultList = (props: IProps) => {
         setSelectedRowKeys(new Set());
     }, [localArticles]);
 
-    const stats = useMemo(() => {
+    const globalSentiment = useMemo(() => {
+        if (!localStats) return null;
+        return {
+            positive: localStats.positive,
+            negative: localStats.negative,
+            neutral: localStats.neutral
+        };
+    }, [localStats]);
+
+    const pageSentiment = useMemo(() => {
         const positive = localArticles.filter(a => Number(a.ai_sentiment_score || 0) > 0).length;
         const negative = localArticles.filter(a => Number(a.ai_sentiment_score || 0) < 0).length;
         const neutral = localArticles.length - positive - negative;
-        const sources = new Set(localArticles.map(a => a.website)).size;
-        
-        const total = localArticles.length || 1;
-        const posPercent = Math.round((positive / total) * 100);
-        const neuPercent = Math.round((neutral / total) * 100);
-        const negPercent = 100 - posPercent - neuPercent;
+        return { positive, negative, neutral };
+    }, [localArticles]);
 
-        return { positive, negative, neutral, sources, posPercent, neuPercent, negPercent };
+    const sourceList = useMemo(() => {
+        const sources = new Set(localArticles.map(a => a.website));
+        return Array.from(sources);
     }, [localArticles]);
 
     const displayedArticles = useMemo(() => {
@@ -296,6 +419,9 @@ const ArticleResultList = (props: IProps) => {
                                         total: resArticles.data.total,
                                         totalPages: resArticles.data.totalPages
                                     });
+                                    if (resArticles.data.sentiment_stats) {
+                                        setLocalStats(resArticles.data.sentiment_stats);
+                                    }
                                 }
                             }
                             
@@ -382,8 +508,6 @@ const ArticleResultList = (props: IProps) => {
         }
     };
 
-    const dayjs = require('dayjs');
-
     const breadcrumbItems = [
         { title: <Link href="/model"><HomeOutlined /></Link> },
         { title: <span style={{ fontWeight: 500 }}>Kết quả tìm kiếm</span> },
@@ -391,74 +515,92 @@ const ArticleResultList = (props: IProps) => {
 
     return (
         <div style={{ maxWidth: 1300, margin: '0 auto', paddingBottom: 60 }}>
-            <Flex justify="space-between" align="end" style={{ marginBottom: 24 }}>
+            {/* Styles for animation - Combined all keyframes here to avoid nested styled-jsx error */}
+            <style jsx global>{`
+                @keyframes fadeInUp {
+                    from { opacity: 0; transform: translateY(20px); }
+                    to { opacity: 1; transform: translateY(0); }
+                }
+                .article-item-animate {
+                    animation: fadeInUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+                    opacity: 0;
+                }
+                @keyframes ping {
+                    0% { transform: scale(1); opacity: 0.2; }
+                    75% { transform: scale(1.4); opacity: 0; }
+                    100% { transform: scale(1.4); opacity: 0; }
+                }
+            `}</style>
+
+            <Flex justify="space-between" align="end" style={{ marginBottom: 28 }}>
                 <div>
                     <Breadcrumb items={breadcrumbItems} style={{ marginBottom: 12 }} />
-                    <Title level={2} style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.5px' }}>
+                    <Title level={2} style={{ margin: 0, fontWeight: 700, letterSpacing: '-0.5px', background: 'linear-gradient(45deg, #1f1f1f, #595959)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                         Tổng quan kết quả
                     </Title>
-                    <Text type="secondary">
-                        Tìm thấy <strong style={{ color: token.colorText }}>{localMeta.total}</strong> bài viết phù hợp với tiêu chí của bạn
+                    <Text type="secondary" style={{ fontSize: 15 }}>
+                        Tìm thấy <strong style={{ color: token.colorPrimary, fontSize: 18 }}>{localMeta.total}</strong> bài viết phù hợp
                     </Text>
                 </div>
             </Flex>
 
             {localArticles.length > 0 && (
-                <Row gutter={[20, 20]} style={{ marginBottom: 32 }}>
-                    <Col xs={24} sm={8} lg={6}>
+                <Row gutter={[24, 24]} style={{ marginBottom: 36 }}>
+                    <Col xs={24} sm={12} md={6} lg={6}>
                         <StatCard 
                             title="Tổng bài viết" 
                             value={localMeta.total} 
                             icon={<DatabaseOutlined />} 
-                            color={token.colorPrimary}
+                            gradient="linear-gradient(135deg, #40a9ff, #096dd9)"
                             subTitle={
                                 isProcessing ? 
-                                <Space size={4} style={{ fontSize: 12, color: token.colorSuccess }}>
-                                    <SyncOutlined spin /> Đang cập nhật
-                                </Space> : null
+                                <Tag color="processing" icon={<SyncOutlined spin />}>Đang cập nhật</Tag> : null
                             }
                         />
                     </Col>
-                    <Col xs={24} sm={8} lg={6}>
-                        <StatCard 
-                            title="Nguồn tin" 
-                            value={stats.sources} 
-                            icon={<GlobalOutlined />} 
-                            color="#13c2c2"
-                        />
+                    
+                    <Col xs={24} sm={12} md={6} lg={6}>
+                        <SourceStatCard sources={sourceList} />
                     </Col>
-                    <Col xs={24} sm={24} lg={12}>
+
+                    <Col xs={24} sm={24} md={12} lg={12}>
                         <Card 
-                            variant="borderless" 
+                            variant="borderless"
                             style={{ 
                                 height: '100%', 
-                                background: token.colorBgContainer,
-                                boxShadow: token.boxShadowTertiary,
-                                borderRadius: 16
+                                background: '#fff',
+                                boxShadow: '0 10px 30px -10px rgba(0,0,0,0.05)',
+                                borderRadius: 24,
                             }}
-                            styles={{ body: { padding: '20px 24px' } }}
+                            styles={{ body: { padding: '24px', height: '100%', display: 'flex', flexDirection: 'column', justifyContent: 'center' } }}
                         >
-                            <Flex justify="space-between" align="center" style={{ marginBottom: 16 }}>
-                                <Flex align="center" gap={8}>
-                                    <div style={{ padding: 8, borderRadius: '50%', background: '#fff7e6', color: '#fa8c16' }}>
-                                        <PieChartOutlined style={{ fontSize: 18 }} />
-                                    </div>
-                                    <Text type="secondary" style={{ fontSize: 13, fontWeight: 500, textTransform: 'uppercase' }}>Phân tích cảm xúc</Text>
-                                </Flex>
-                            </Flex>
-                            
-                            <Flex vertical gap={8}>
-                                <div style={{ display: 'flex', height: 12, borderRadius: 100, overflow: 'hidden' }}>
-                                    <div style={{ flex: stats.positive, background: token.colorSuccess, transition: 'flex 0.5s' }} />
-                                    <div style={{ flex: stats.neutral, background: token.colorWarning, transition: 'flex 0.5s' }} />
-                                    <div style={{ flex: stats.negative, background: token.colorError, transition: 'flex 0.5s' }} />
-                                </div>
-                                <Flex justify="space-between" style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
-                                    <Space><Badge color={token.colorSuccess} text={`Tích cực (${stats.positive})`} /></Space>
-                                    <Space><Badge color={token.colorWarning} text={`Trung tính (${stats.neutral})`} /></Space>
-                                    <Space><Badge color={token.colorError} text={`Tiêu cực (${stats.negative})`} /></Space>
-                                </Flex>
-                            </Flex>
+                            <Row gutter={24}>
+                                <Col span={12}>
+                                    {globalSentiment ? (
+                                        <SentimentSection
+                                            title="Tổng quan cảm xúc"
+                                            stats={globalSentiment}
+                                            icon={<PieChartOutlined />}
+                                            color="#fa8c16"
+                                            token={token}
+                                        />
+                                    ) : (
+                                        <div style={{ textAlign: 'center', color: token.colorTextDisabled }}>Chưa có dữ liệu</div>
+                                    )}
+                                </Col>
+                                <Col span={1} style={{ display: 'flex', justifyContent: 'center' }}>
+                                    <Divider orientation="vertical" style={{ height: '100%' }} />
+                                </Col>
+                                <Col span={11}>
+                                    <SentimentSection
+                                        title="Cảm xúc trang này"
+                                        stats={pageSentiment}
+                                        icon={<BarChartOutlined />}
+                                        color="#722ed1"
+                                        token={token}
+                                    />
+                                </Col>
+                            </Row>
                         </Card>
                     </Col>
                 </Row>
@@ -467,44 +609,42 @@ const ArticleResultList = (props: IProps) => {
             {isProcessing && (
                 <div 
                     style={{ 
-                        background: `linear-gradient(90deg, ${token.colorPrimaryBg}, #fff)`,
+                        background: 'rgba(255, 255, 255, 0.8)',
+                        backdropFilter: 'blur(10px)',
                         border: `1px solid ${token.colorPrimaryBorder}`,
-                        borderRadius: 12,
-                        padding: '12px 20px',
+                        borderRadius: 16,
+                        padding: '16px 24px',
                         marginBottom: 24,
                         display: 'flex',
                         alignItems: 'center',
-                        gap: 16,
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.05)'
+                        gap: 20,
+                        boxShadow: '0 8px 30px rgba(0,0,0,0.08)'
                     }}
                 >
                     <div style={{ position: 'relative' }}>
                         <div style={{ 
-                            position: 'absolute', inset: 0, borderRadius: '50%', 
-                            background: token.colorPrimary, opacity: 0.2, animation: 'ping 1.5s infinite' 
+                            position: 'absolute', inset: -4, borderRadius: '50%', 
+                            background: token.colorPrimary, opacity: 0.2, animation: 'ping 2s infinite' 
                         }} />
-                        <Avatar style={{ background: token.colorPrimary }} icon={<ThunderboltFilled />} />
+                        <Avatar size={48} style={{ background: `linear-gradient(135deg, ${token.colorPrimary}, #1890ff)` }} icon={<ThunderboltFilled style={{ fontSize: 24 }} />} />
                     </div>
                     <div style={{ flex: 1 }}>
-                        <Text strong style={{ fontSize: 15 }}>Hệ thống đang hoạt động</Text>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <Flex justify="space-between" align="center">
+                            <Text strong style={{ fontSize: 16 }}>Hệ thống đang hoạt động</Text>
+                            <Text type="secondary">{Math.round((localArticles.length / (localMeta.total || 1)) * 100)}%</Text>
+                        </Flex>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4 }}>
                             <Text type="secondary" style={{ fontSize: 13 }}>{streamMessage}</Text>
                             <Progress 
                                 percent={99} 
                                 status="active" 
                                 showInfo={false} 
-                                strokeColor={{ from: token.colorPrimary, to: token.colorSuccess }}
-                                size={[100, 6]} 
+                                strokeColor={{ from: token.colorPrimary, to: '#52c41a' }}
+                                size={[0, 8]}
+                                style={{ flex: 1 }}
                             />
                         </div>
                     </div>
-                    <style jsx>{`
-                        @keyframes ping {
-                            0% { transform: scale(1); opacity: 0.2; }
-                            75% { transform: scale(1.5); opacity: 0; }
-                            100% { transform: scale(1.5); opacity: 0; }
-                        }
-                    `}</style>
                 </div>
             )}
 
@@ -517,45 +657,50 @@ const ArticleResultList = (props: IProps) => {
                 <Card
                     variant="borderless"
                     style={{ 
-                        boxShadow: '0 8px 24px rgba(0,0,0,0.08)', 
-                        borderRadius: 12,
-                        backdropFilter: 'blur(10px)',
-                        background: 'rgba(255, 255, 255, 0.95)'
+                        boxShadow: '0 8px 24px rgba(0,0,0,0.06)', 
+                        borderRadius: 16,
+                        background: 'rgba(255, 255, 255, 0.85)',
+                        backdropFilter: 'blur(12px)',
+                        border: '1px solid rgba(255,255,255,0.3)'
                     }}
-                    styles={{ body: { padding: '12px 20px' } }}
+                    styles={{ body: { padding: '16px 24px' } }}
                 >
                     <Flex justify="space-between" align="center" wrap="wrap" gap={16}>
-                        <Space size="middle">
+                        <Space size="large">
                             <Checkbox 
                                 checked={isAllSelected} 
                                 onChange={onSelectAll} 
                                 disabled={localArticles.length === 0}
-                                style={{ fontSize: 14, fontWeight: 500 }}
+                                style={{ fontSize: 15, fontWeight: 500 }}
                             >
                                 Chọn tất cả
                             </Checkbox>
                             
-                            <Select
-                                defaultValue="publish_date-desc"
-                                style={{ width: 190 }}
-                                variant="borderless"
-                                onChange={handleSortChange}
-                                suffixIcon={<FilterOutlined style={{ color: token.colorTextSecondary }} />}
-                                options={[
-                                    { value: 'publish_date-desc', label: 'Mới nhất trước' },
-                                    { value: 'publish_date-asc', label: 'Cũ nhất trước' },
-                                    { value: 'sentiment-desc', label: 'Tích cực giảm dần' },
-                                    { value: 'sentiment-asc', label: 'Tiêu cực giảm dần' },
-                                ]}
-                                styles={{ popup: { root: { borderRadius: 12, padding: 8 } } }}
-                            />
+                            <Divider orientation="vertical" />
+
+                            <Flex align="center" gap={8}>
+                                <Text type="secondary"><FilterOutlined /> Sắp xếp:</Text>
+                                <Select
+                                    defaultValue="publish_date-desc"
+                                    style={{ width: 200 }}
+                                    variant="borderless"
+                                    onChange={handleSortChange}
+                                    options={[
+                                        { value: 'publish_date-desc', label: 'Mới nhất trước' },
+                                        { value: 'publish_date-asc', label: 'Cũ nhất trước' },
+                                        { value: 'sentiment-desc', label: 'Tích cực giảm dần' },
+                                        { value: 'sentiment-asc', label: 'Tiêu cực giảm dần' },
+                                    ]}
+                                    popupMatchSelectWidth={false}
+                                />
+                            </Flex>
                         </Space>
 
                         <Space>
                             {selectedRowKeys.size > 0 && (
-                                <Tag color="blue" style={{ margin: 0, padding: '4px 10px', fontSize: 13, borderRadius: 20 }}>
-                                    Đã chọn {selectedRowKeys.size} bài
-                                </Tag>
+                                <span style={{ marginRight: 8, fontSize: 14, color: token.colorPrimary, fontWeight: 600 }}>
+                                    Đã chọn: {selectedRowKeys.size}
+                                </span>
                             )}
                             <Button
                                 type={selectedRowKeys.size > 0 ? "primary" : "default"}
@@ -564,10 +709,11 @@ const ArticleResultList = (props: IProps) => {
                                 onClick={handleExport}
                                 disabled={isExporting || (localArticles.length === 0)}
                                 shape="round"
+                                size="large"
                                 style={selectedRowKeys.size > 0 ? { 
                                     background: `linear-gradient(135deg, ${token.colorSuccess}, #52c41a)`, 
                                     border: 'none',
-                                    boxShadow: '0 4px 10px rgba(82, 196, 26, 0.3)'
+                                    boxShadow: '0 4px 15px rgba(82, 196, 26, 0.35)'
                                 } : {}}
                             >
                                 {selectedRowKeys.size > 0 ? 'Xuất lựa chọn' : 'Xuất Excel'}
@@ -578,10 +724,14 @@ const ArticleResultList = (props: IProps) => {
             </div>
 
             {localArticles.length > 0 || isProcessing ? (
-                <div className="article-list-animate">
-                    <Flex vertical gap={20}>
-                        {displayedArticles.map((item) => (
-                            <div key={item.id || item._id} style={{ transition: 'all 0.3s' }}>
+                <div>
+                    <Flex vertical gap={24}>
+                        {displayedArticles.map((item, index) => (
+                            <div 
+                                key={item.id || item._id} 
+                                className="article-item-animate"
+                                style={{ animationDelay: `${index * 0.05}s` }}
+                            >
                                 <ArticleItem
                                     article={item}
                                     isSelected={selectedRowKeys.has(item.id || item._id)}
@@ -592,13 +742,13 @@ const ArticleResultList = (props: IProps) => {
                     </Flex>
 
                     {isProcessing && localArticles.length < localMeta.pageSize && (
-                        <div style={{ textAlign: 'center', padding: '40px', marginTop: 20, opacity: 0.7 }}>
+                        <div style={{ textAlign: 'center', padding: '40px', marginTop: 20 }}>
                             <Spin indicator={<LoadingOutlined style={{ fontSize: 32 }} spin />} />
-                            <div style={{ marginTop: 12, color: token.colorTextSecondary }}>Đang tải thêm bài viết...</div>
+                            <div style={{ marginTop: 16, color: token.colorTextSecondary, fontWeight: 500 }}>Đang tải thêm dữ liệu...</div>
                         </div>
                     )}
 
-                    <Flex justify="center" style={{ marginTop: 48 }}>
+                    <Flex justify="center" style={{ marginTop: 60 }}>
                         <Pagination
                             current={localMeta.current}
                             pageSize={localMeta.pageSize}
@@ -606,8 +756,8 @@ const ArticleResultList = (props: IProps) => {
                             onChange={handlePageChange}
                             showSizeChanger={false}
                             itemRender={(_, type, originalElement) => {
-                                if (type === 'prev') return <Button type="text">Trước</Button>;
-                                if (type === 'next') return <Button type="text">Sau</Button>;
+                                if (type === 'prev') return <Button type="default" shape="round">Trước</Button>;
+                                if (type === 'next') return <Button type="default" shape="round">Sau</Button>;
                                 return originalElement;
                             }}
                         />
@@ -620,18 +770,18 @@ const ArticleResultList = (props: IProps) => {
                         <Flex vertical align="center" gap={16}>
                             <Title level={4} style={{ margin: 0 }}>Chưa có dữ liệu</Title>
                             <Text type="secondary" style={{ maxWidth: 400, textAlign: 'center' }}>
-                                Chúng tôi không tìm thấy bài báo nào khớp với yêu cầu của bạn. Hãy thử thay đổi bộ lọc hoặc từ khóa.
+                                Chúng tôi không tìm thấy bài báo nào khớp với yêu cầu của bạn.
                             </Text>
                             <Link href="/model">
-                                <Button type="primary" size="large" icon={<SyncOutlined />}>Tạo tìm kiếm mới</Button>
+                                <Button type="primary" size="large" icon={<SyncOutlined />} shape="round">Tạo tìm kiếm mới</Button>
                             </Link>
                         </Flex>
                     }
                     style={{ 
-                        background: token.colorBgContainer, 
-                        padding: '60px 20px', 
-                        borderRadius: 16,
-                        boxShadow: token.boxShadowTertiary 
+                        background: '#fff', 
+                        padding: '80px 20px', 
+                        borderRadius: 24,
+                        boxShadow: '0 10px 30px rgba(0,0,0,0.03)' 
                     }}
                 />
             )}

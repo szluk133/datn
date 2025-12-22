@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, MouseEvent, useEffect } from 'react';
-import { Button, Typography, Modal, Input, Alert, Tag, Space, Divider, Flex, theme, Tooltip, Card } from 'antd';
+import { Button, Typography, Modal, Input, Alert, Tag, Space, Divider, Flex, theme, Tooltip, Card, notification } from 'antd';
 import { 
     CommentOutlined, 
     RobotOutlined, 
@@ -11,9 +11,11 @@ import {
     SmileFilled, 
     MehFilled, 
     FrownFilled,
-    LinkOutlined
+    LinkOutlined,
+    FileWordOutlined
 } from '@ant-design/icons';
 import { useChatbot } from '@/components/client/chatbot/chatbot.context';
+import { useSession } from 'next-auth/react';
 import BookmarkButton from './bookmark.btn';
 
 const { Paragraph, Title, Text } = Typography;
@@ -29,6 +31,7 @@ interface ArticleBodyProps {
     ai_summary?: string[];
     site_categories?: string[];
     url?: string;
+    summary?: string;
 }
 
 const ArticleBody: React.FC<ArticleBodyProps> = ({ 
@@ -40,10 +43,12 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
     ai_sentiment_score, 
     ai_summary, 
     site_categories,
-    url
+    url,
+    summary
 }) => {
     const { token } = theme.useToken();
     const { sendMessage, setView, setPageContext } = useChatbot();
+    const { data: session } = useSession();
     
     useEffect(() => {
         if (articleId) {
@@ -58,6 +63,7 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
     const [selection, setSelection] = useState<{ x: number, y: number, text: string } | null>(null);
     const [isModalVisible, setIsModalVisible] = useState(false);
     const [question, setQuestion] = useState('');
+    const [isExporting, setIsExporting] = useState(false);
     
     const contentRef = useRef<HTMLDivElement>(null);
 
@@ -117,6 +123,45 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
         setQuestion('');
     };
 
+    const handleExportWord = async () => {
+        if (!session?.access_token) {
+            notification.warning({ message: "Vui lòng đăng nhập để sử dụng tính năng này" });
+            return;
+        }
+
+        try {
+            setIsExporting(true);
+            const response = await fetch(`${process.env.NEXT_PUBLIC_BACKEND_URL}/api/v1/article/export/word/${articleId}`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${session.access_token}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Export failed');
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = downloadUrl;
+            const safeTitle = title.replace(/[^a-z0-9\u00C0-\u1EF9 ]/gi, '_').substring(0, 50);
+            a.download = `${safeTitle}.docx`;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(downloadUrl);
+            a.remove();
+            
+            notification.success({ title: "Xuất file Word thành công" });
+        } catch (error) {
+            console.error("Export error:", error);
+            notification.error({ title: "Có lỗi xảy ra khi xuất file" });
+        } finally {
+            setIsExporting(false);
+        }
+    };
+
     return (
         <div style={{ position: 'relative' }}>
             
@@ -125,14 +170,31 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
                     <Title level={1} style={{ margin: 0, fontSize: '28px', lineHeight: 1.3, color: token.colorTextHeading }}>
                         {title}
                     </Title>
-                    <BookmarkButton 
-                        articleId={articleId} 
-                        articleTitle={title} 
-                        articleUrl={url} 
-                        size="large"
-                        shape="circle"
-                        type="default"
-                    />
+                    <Space size={12}>
+                        <Tooltip title="Xuất ra file Word">
+                            <Button 
+                                icon={<FileWordOutlined style={{ color: '#1677ff' }} />} 
+                                size="large"
+                                shape="circle"
+                                onClick={handleExportWord}
+                                loading={isExporting}
+                                style={{ border: `1px solid ${token.colorBorder}` }}
+                            />
+                        </Tooltip>
+                        <BookmarkButton 
+                            articleId={articleId} 
+                            articleTitle={title} 
+                            articleUrl={url} 
+                            website={website}
+                            siteCategories={site_categories}
+                            summary={summary}
+                            aiSentimentScore={ai_sentiment_score}
+                            publishDate={publish_date}
+                            size="large"
+                            shape="circle"
+                            type="default"
+                        />
+                    </Space>
                 </Flex>
 
                 <Flex wrap="wrap" gap={12} align="center" style={{ color: token.colorTextSecondary }}>
@@ -152,7 +214,7 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
                             margin: 0, 
                             border: 'none', 
                             backgroundColor: sentiment.bg, 
-                            color: sentiment.color,
+                            color: sentiment.color, 
                             fontWeight: 500
                         }}
                     >

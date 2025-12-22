@@ -50,6 +50,15 @@ const ArticleDetailPage = async ({
         );
     }
 
+    const getISODate = (dateStr?: string) => {
+        try {
+            if (!dateStr) return new Date().toISOString();
+            return new Date(dateStr).toISOString();
+        } catch (e) {
+            return new Date().toISOString();
+        }
+    };
+
     return (
         <div style={{ 
             backgroundColor: '#f5f7fa',
@@ -76,11 +85,12 @@ const ArticleDetailPage = async ({
                         title={article.title}
                         content={article.content || ''}
                         website={article.website}
-                        publish_date={article.publish_date}
+                        publish_date={getISODate(article.publish_date)}
                         ai_sentiment_score={article.ai_sentiment_score}
                         ai_summary={article.ai_summary}
                         site_categories={article.site_categories}
                         url={article.url}
+                        summary={article.summary}
                     />
                 </Card>
             </div>
