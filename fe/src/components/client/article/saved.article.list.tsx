@@ -108,7 +108,7 @@ const SavedArticleList = (props: IProps) => {
 
     const breadcrumbItems = [
         { title: <Link href="/model"><HomeOutlined /></Link> },
-        { title: <span style={{ fontWeight: 500 }}>Thư viện đã lưu</span> },
+        { title: <span style={{ fontWeight: 500 }}>Thư viện của tôi</span> },
     ];
 
     const stats = useMemo(() => {

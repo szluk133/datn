@@ -176,7 +176,7 @@ const DashboardClient = () => {
                         <Card hoverable style={cardStyle} styles={{ body: { padding: 32, height: '100%', display: 'flex', flexDirection: 'column' } }}>
                             <div style={{ marginBottom: 20 }}>
                                 <Avatar size={64} icon={<ReadOutlined />} style={{ backgroundColor: '#fff7e6', color: '#faad14', marginBottom: 16 }} />
-                                <Title level={4}>Thư viện Đã lưu</Title>
+                                <Title level={4}>Thư viện của tôi</Title>
                                 <Paragraph type="secondary" style={{ flex: 1 }}>
                                     Quản lý các bài báo quan trọng bạn đã đánh dấu. Dễ dàng xem lại lịch sử nghiên cứu và báo cáo đã lưu.
                                 </Paragraph>

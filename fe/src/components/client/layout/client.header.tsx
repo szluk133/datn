@@ -124,7 +124,7 @@ const ClientHeader: React.FC = () => {
             icon: <SearchOutlined /> 
         },
         { 
-            label: 'Thư viện đã lưu', 
+            label: 'Thư viện của tôi', 
             key: 'saved', 
             icon: <ReadOutlined /> 
         },
