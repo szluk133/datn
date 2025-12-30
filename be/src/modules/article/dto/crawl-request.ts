@@ -48,6 +48,7 @@ export class ArticleResponseDto {
     publish_date: string;
     url: string;
     
+    ai_sentiment_label: string | null;
     ai_sentiment_score: number | null; 
     ai_summary?: string[];
     site_categories?: string[];

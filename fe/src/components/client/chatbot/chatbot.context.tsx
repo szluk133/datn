@@ -8,9 +8,10 @@ import { IConversation, IChatMessage, SourceDto } from '@/types/next-auth';
 type ChatbotView = 'icon' | 'window' | 'full';
 
 type PageContextType = {
-    current_page: 'home_page' | 'list_page' | 'detail_page';
+    current_page: 'home_page' | 'list_page' | 'detail_page' | 'my_page';
     search_id?: string;
     article_id?: string;
+    update_id?: string;
     sort_by?: string;
     sort_order?: 'asc' | 'desc';
 };

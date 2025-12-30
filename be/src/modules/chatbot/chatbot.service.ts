@@ -5,6 +5,7 @@ import { Model } from 'mongoose';
 import { firstValueFrom } from 'rxjs';
 import { Conversation, ConversationDocument } from './schemas/chatbot.schema';
 import { Message, MessageDocument } from './schemas/chatbot.schema';
+import { Article, ArticleDocument } from '../article/schemas/article.schema';
 import { 
     ChatRequestDto, 
     ChatResponseDto, 
@@ -25,6 +26,7 @@ interface ExternalChatResponse {
   sources: ExternalSource[] | null;
   intent_detected?: string;
   strategy_used?: string;
+  dependency_label?: string;
 }
 
 @Injectable()
@@ -35,10 +37,10 @@ export class ChatbotService {
   constructor(
     @InjectModel(Conversation.name) private conversationModel: Model<ConversationDocument>,
     @InjectModel(Message.name) private messageModel: Model<MessageDocument>,
+    @InjectModel(Article.name) private articleModel: Model<ArticleDocument>,
     private readonly httpService: HttpService,
   ) {}
 
-  // Tạo cuộc trò chuyện mới
   async createConversation(createDto: CreateConversationDto): Promise<{ conversation_id: string }> {
     const newConversation = new this.conversationModel({
       user_id: createDto.user_id,
@@ -49,7 +51,6 @@ export class ChatbotService {
     return { conversation_id: newConversation._id.toString() };
   }
 
-  // Lấy lịch sử cuộc trò chuyện
   async getConversationHistory(userId: string): Promise<ConversationHistoryDto[]> {
     const conversations = await this.conversationModel
       .find({ user_id: userId })
@@ -63,7 +64,6 @@ export class ChatbotService {
     }));
   }
   
-  // Lấy chi tiết tin nhắn
   async getMessagesByConversationId(conversationId: string): Promise<MessageHistoryDto[]> {
     const messages = await this.messageModel
       .find({ conversation_id: conversationId })
@@ -75,10 +75,8 @@ export class ChatbotService {
         query: msg.query,
         answer: msg.answer,
         created_at: msg.createdAt,
-        intent_detected: msg.intent_detected,
-        strategy_used: msg.strategy_used,
         sources: msg.sources ? msg.sources.map(s => ({
-            article_id: s.article_id,
+            _id: s._id,
             title: s.title,
             url: s.url,
         })) : [],
@@ -121,15 +119,31 @@ export class ChatbotService {
       throw new InternalServerErrorException('Hệ thống AI đang bận hoặc gặp sự cố.');
     }
 
+    let mappedSources = [];
+    if (externalResponse.sources && externalResponse.sources.length > 0) {
+        const articleIds = externalResponse.sources.map(s => s.article_id);
+        const articles = await this.articleModel.find({ article_id: { $in: articleIds } }).select('article_id _id').exec();
+        
+        const articleMap = new Map(articles.map(a => [a.article_id, a._id.toString()]));
+
+        mappedSources = externalResponse.sources.map(s => ({
+            _id: articleMap.get(s.article_id) || s.article_id,
+            title: s.title,
+            url: s.url
+        }));
+    }
+
+    // Lưu vào DB (bao gồm cả dependency_label)
     const newMessage = new this.messageModel({
       conversation_id: conversationId,
       user_id: chatDto.user_id,
       query: chatDto.query,
       context: chatDto.context,
       answer: externalResponse.answer,
-      sources: externalResponse.sources || [],
+      sources: mappedSources,
       intent_detected: externalResponse.intent_detected,
       strategy_used: externalResponse.strategy_used,
+      dependency_label: externalResponse.dependency_label, // Lưu thêm trường này
     });
     await newMessage.save();
     
@@ -137,16 +151,11 @@ export class ChatbotService {
         await this.conversationModel.findByIdAndUpdate(conversationId, { title: chatDto.query });
     }
 
+    // Trả về FE (KHÔNG bao gồm các trường log hệ thống)
     return {
       answer: externalResponse.answer,
       conversation_id: conversationId,
-      sources: externalResponse.sources ? externalResponse.sources.map(s => ({
-          article_id: s.article_id,
-          title: s.title,
-          url: s.url
-      })) : [],
-      intent_detected: externalResponse.intent_detected,
-      strategy_used: externalResponse.strategy_used
+      sources: mappedSources,
     };
   }
 }

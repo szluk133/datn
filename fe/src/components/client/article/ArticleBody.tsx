@@ -12,7 +12,8 @@ import {
     MehFilled, 
     FrownFilled,
     LinkOutlined,
-    FileWordOutlined
+    FileWordOutlined,
+    SafetyCertificateOutlined
 } from '@ant-design/icons';
 import { useChatbot } from '@/components/client/chatbot/chatbot.context';
 import { useSession } from 'next-auth/react';
@@ -28,6 +29,7 @@ interface ArticleBodyProps {
     website: string;
     publish_date: string;
     ai_sentiment_score?: number;
+    ai_sentiment_label?: string;
     ai_summary?: string[];
     site_categories?: string[];
     url?: string;
@@ -40,7 +42,8 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
     content, 
     website, 
     publish_date, 
-    ai_sentiment_score, 
+    ai_sentiment_score,
+    ai_sentiment_label, 
     ai_summary, 
     site_categories,
     url,
@@ -67,18 +70,27 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
     
     const contentRef = useRef<HTMLDivElement>(null);
 
-    const getSentimentInfo = (score: number | null | undefined) => {
-        if (score === undefined || score === null || isNaN(score)) {
-            return { color: token.colorTextDescription, icon: <MehFilled />, label: 'Chưa phân tích', bg: token.colorFillQuaternary };
+    // Updated sentiment logic based on Label
+    const getSentimentInfo = (label: string | undefined, confidence: number | undefined) => {
+        const safeLabel = label ? label.toLowerCase().trim() : '';
+        
+        if (['tích cực', 'positive'].includes(safeLabel)) {
+            return { color: token.colorSuccess, icon: <SmileFilled />, label: 'Tích cực', bg: token.colorSuccessBg };
         }
-        if (score >= 0.5) return { color: token.colorSuccess, icon: <SmileFilled />, label: 'Tích cực', bg: token.colorSuccessBg };
-        if (score > 0) return { color: token.colorWarning, icon: <SmileFilled />, label: 'Khá tốt', bg: token.colorWarningBg };
-        if (score === 0) return { color: token.colorWarning, icon: <MehFilled />, label: 'Trung tính', bg: token.colorWarningBg };
-        if (score > -0.5) return { color: token.colorError, icon: <FrownFilled />, label: 'Tiêu cực', bg: token.colorErrorBg };
-        return { color: token.colorErrorActive, icon: <FrownFilled />, label: 'Rất tiêu cực', bg: token.colorErrorBg };
+        if (['tiêu cực', 'negative'].includes(safeLabel)) {
+            return { color: token.colorError, icon: <FrownFilled />, label: 'Tiêu cực', bg: token.colorErrorBg };
+        }
+        if (['trung tính', 'neutral'].includes(safeLabel)) {
+            return { color: token.colorWarning, icon: <MehFilled />, label: 'Trung tính', bg: token.colorWarningBg };
+        }
+        
+        return { color: token.colorTextDescription, icon: <MehFilled />, label: 'Chưa phân tích', bg: token.colorFillQuaternary };
     };
 
-    const sentiment = getSentimentInfo(ai_sentiment_score);
+    const sentiment = getSentimentInfo(ai_sentiment_label, ai_sentiment_score);
+    const confidenceDisplay = ai_sentiment_score !== undefined 
+        ? `${(ai_sentiment_score * 100).toFixed(0)}%` 
+        : 'N/A';
 
     const handleMouseUp = (e: MouseEvent<HTMLDivElement>) => {
         if (isModalVisible) return;
@@ -189,6 +201,7 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
                             siteCategories={site_categories}
                             summary={summary}
                             aiSentimentScore={ai_sentiment_score}
+                            aiSentimentLabel={ai_sentiment_label}
                             publishDate={publish_date}
                             size="large"
                             shape="circle"
@@ -209,17 +222,20 @@ const ArticleBody: React.FC<ArticleBodyProps> = ({
                         <GlobalOutlined style={{ marginRight: 4 }} /> {website}
                     </Tag>
 
-                    <Tag 
-                        style={{ 
-                            margin: 0, 
-                            border: 'none', 
-                            backgroundColor: sentiment.bg, 
-                            color: sentiment.color, 
-                            fontWeight: 500
-                        }}
-                    >
-                        {sentiment.icon} <span style={{ marginLeft: 4 }}>{sentiment.label} {ai_sentiment_score !== undefined ? `(${ai_sentiment_score})` : ''}</span>
-                    </Tag>
+                    <Tooltip title={`Độ tin cậy: ${confidenceDisplay}`}>
+                        <Tag 
+                            style={{ 
+                                margin: 0, 
+                                border: 'none', 
+                                backgroundColor: sentiment.bg, 
+                                color: sentiment.color, 
+                                fontWeight: 500,
+                                cursor: 'help'
+                            }}
+                        >
+                            {sentiment.icon} <span style={{ marginLeft: 4 }}>{sentiment.label}</span>
+                        </Tag>
+                    </Tooltip>
                 </Flex>
 
                 {site_categories && site_categories.length > 0 && (

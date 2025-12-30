@@ -38,16 +38,20 @@ export class AdminSearchArticleDto {
     endDate?: string;
 
     @IsOptional()
-    @Type(() => Number)
-    @IsNumber()
-    @Min(-1)
-    @Max(1)
-    minSentiment?: number;
+    @IsString()
+    sentimentLabel?: string;
 
     @IsOptional()
     @Type(() => Number)
     @IsNumber()
-    @Min(-1)
+    @Min(0) // Score giờ là độ tin cậy (0-1)
+    @Max(1)
+    minSentiment?: number; // Lọc theo độ tin cậy tối thiểu
+
+    @IsOptional()
+    @Type(() => Number)
+    @IsNumber()
+    @Min(0)
     @Max(1)
     maxSentiment?: number;
 

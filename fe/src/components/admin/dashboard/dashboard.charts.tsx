@@ -2,7 +2,17 @@
 
 import React, { useEffect, useState } from 'react';
 import { Card, Spin, DatePicker, Space, Button } from 'antd';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { 
+    ComposedChart, 
+    Line, 
+    Bar, 
+    XAxis, 
+    YAxis, 
+    CartesianGrid, 
+    Tooltip, 
+    Legend, 
+    ResponsiveContainer 
+} from 'recharts';
 import { useSession } from 'next-auth/react';
 import { ReloadOutlined } from '@ant-design/icons';
 import { sendRequest } from '@/utils/api';
@@ -11,9 +21,17 @@ import dayjs from 'dayjs';
 
 const { RangePicker } = DatePicker;
 
+interface ISentimentTrendDisplay extends ISentimentTrend {
+    displayDate: string;
+    positive: number;
+    neutral: number;
+    negative: number;
+    confidencePct: string;
+}
+
 const DashboardCharts = () => {
     const { data: session } = useSession();
-    const [data, setData] = useState<any[]>([]);
+    const [data, setData] = useState<ISentimentTrendDisplay[]>([]);
     const [loading, setLoading] = useState(true);
     
     const [dateRange, setDateRange] = useState<[dayjs.Dayjs | null, dayjs.Dayjs | null]>([
@@ -43,6 +61,10 @@ const DashboardCharts = () => {
                 const formattedData = res.data.map(item => ({
                     ...item,
                     displayDate: dayjs(item.date).format('DD/MM'),
+                    positive: item.breakdown.positive,
+                    neutral: item.breakdown.neutral,
+                    negative: item.breakdown.negative,
+                    confidencePct: (item.avgConfidence * 100).toFixed(1)
                 }));
                 setData(formattedData);
             }
@@ -64,7 +86,7 @@ const DashboardCharts = () => {
     return (
         <div style={{ marginTop: 20 }}>
             <Card 
-                title="Xu hướng cảm xúc & Số lượng bài viết" 
+                title="Xu hướng Phân loại & Độ tin cậy AI" 
                 variant="borderless"
                 extra={
                     <Space>
@@ -91,33 +113,39 @@ const DashboardCharts = () => {
                 ) : (
                     <div style={{ width: '100%', height: 350 }}>
                         <ResponsiveContainer>
-                            <LineChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                            <ComposedChart data={data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" />
                                 <XAxis dataKey="displayDate" />
-                                <YAxis yAxisId="left" label={{ value: 'Điểm cảm xúc', angle: -90, position: 'insideLeft' }} domain={[-1, 1]} />
-                                <YAxis yAxisId="right" orientation="right" label={{ value: 'Số bài viết', angle: 90, position: 'insideRight' }} />
+                                
+                                <YAxis yAxisId="left" label={{ value: 'Số lượng bài viết', angle: -90, position: 'insideLeft' }} />
+                                
+                                <YAxis 
+                                    yAxisId="right" 
+                                    orientation="right" 
+                                    unit="%"
+                                    domain={[0, 100]}
+                                    label={{ value: 'Độ tin cậy', angle: 90, position: 'insideRight' }} 
+                                />
+                                
                                 <Tooltip 
                                     contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
                                 />
                                 <Legend />
-                                <Line 
-                                    yAxisId="left" 
-                                    type="monotone" 
-                                    dataKey="avgSentiment" 
-                                    stroke="#8884d8" 
-                                    name="Cảm xúc TB" 
-                                    strokeWidth={2}
-                                    activeDot={{ r: 6 }} 
-                                />
+
+                                <Bar yAxisId="left" dataKey="positive" stackId="a" name="Tích cực" fill="#52c41a" barSize={20} />
+                                <Bar yAxisId="left" dataKey="neutral" stackId="a" name="Trung tính" fill="#faad14" barSize={20} />
+                                <Bar yAxisId="left" dataKey="negative" stackId="a" name="Tiêu cực" fill="#f5222d" barSize={20} />
+
                                 <Line 
                                     yAxisId="right" 
                                     type="monotone" 
-                                    dataKey="totalArticles" 
-                                    stroke="#82ca9d" 
-                                    name="Tổng bài viết" 
-                                    strokeWidth={2}
+                                    dataKey="confidencePct" 
+                                    stroke="#722ed1" 
+                                    name="Độ tin cậy AI (%)" 
+                                    strokeWidth={3}
+                                    dot={{ r: 4 }}
                                 />
-                            </LineChart>
+                            </ComposedChart>
                         </ResponsiveContainer>
                     </div>
                 )}

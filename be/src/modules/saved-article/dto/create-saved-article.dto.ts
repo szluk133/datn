@@ -21,7 +21,10 @@ export class CreateSavedArticleDto {
     @IsString({ each: true })
     @IsOptional()
     site_categories?: string[];
-
+    
+    @IsString()
+    @IsOptional()
+    ai_sentiment_label?: string;
     @IsString()
     @IsOptional()
     website?: string;

@@ -17,6 +17,7 @@ import { AdminModule } from '@/modules/admin/admin.module';
 import { MeiliSearchModule } from '@/modules/common/meilisearch/meilisearch.module';
 import { SystemLogModule } from '@/modules/common/SystemLog/system-log.module';
 import { SavedArticleModule } from './modules/saved-article/saved-article.module';
+import { MyArticleModule } from './modules/my-article/my-article.module';
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { SavedArticleModule } from './modules/saved-article/saved-article.module
     ChatbotModule,
     AnalyticsModule,
     AdminModule,
+    MyArticleModule,
     MeiliSearchModule,
     SavedArticleModule,
     SystemLogModule,

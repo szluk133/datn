@@ -10,6 +10,7 @@ import { SystemLogService } from '../common/SystemLog/system-loc.service';
 import { AdminSearchArticleDto, ArticleStatus } from './dto/admin.dto';
 import { MeiliSearchService } from '../common/meilisearch/meilisearch.service';
 import { QdrantService } from '../common/qdrant/qdrant.service';
+
 @Injectable()
 export class AdminService {
   private readonly logger = new Logger(AdminService.name);
@@ -39,9 +40,43 @@ export class AdminService {
         { 
             $group: { 
                 _id: null, 
-                avgSentiment: { $avg: '$ai_sentiment_score' },
-                positive: { $sum: { $cond: [{ $gt: ['$ai_sentiment_score', 0.2] }, 1, 0] } },
-                negative: { $sum: { $cond: [{ $lt: ['$ai_sentiment_score', -0.2] }, 1, 0] } }
+                avgConfidence: { $avg: '$ai_sentiment_score' },
+                positive: { 
+                    $sum: { 
+                        $cond: [
+                            { $in: [{ $toLower: '$ai_sentiment_label' }, ['positive', 'tích cực']] }, 
+                            1, 
+                            0
+                        ] 
+                    } 
+                },
+                negative: { 
+                    $sum: { 
+                        $cond: [
+                            { $in: [{ $toLower: '$ai_sentiment_label' }, ['negative', 'tiêu cực']] }, 
+                            1, 
+                            0
+                        ] 
+                    } 
+                },
+                neutral: { 
+                    $sum: { 
+                        $cond: [
+                            { $in: [{ $toLower: '$ai_sentiment_label' }, ['neutral', 'trung tính']] }, 
+                            1, 
+                            0
+                        ] 
+                    } 
+                },
+                undefined: { 
+                    $sum: { 
+                        $cond: [
+                            { $and: [ { $ne: ['$ai_sentiment_label', null] }, { $ne: ['$ai_sentiment_label', ''] } ] },
+                            0,
+                            1
+                        ] 
+                    } 
+                }
             } 
         }
     ]);
@@ -49,7 +84,7 @@ export class AdminService {
     return {
       totalArticles,
       topSources,
-      sentiment: sentimentStats[0] || {},
+      sentiment: sentimentStats[0] || { avgConfidence: 0, positive: 0, negative: 0, neutral: 0, undefined: 0 },
       crawledToday: await this.countCrawledToday()
     };
   }
@@ -64,7 +99,6 @@ export class AdminService {
     return this.articleModel.countDocuments({ createdAt: { $gte: startOfDay } });
   }
 
-  // 1. Cập nhật lịch trình Crawl
   async updateCrawlSchedule(minutes: number) {
     const url = `${this.pythonApiUrl}/admin/schedule`;
     this.logger.log(`Updating crawl schedule to every ${minutes} minutes...`);
@@ -89,7 +123,6 @@ export class AdminService {
     }
   }
 
-  // 2. Kích hoạt Auto Crawl ngay lập tức
   async triggerAutoCrawl() {
     const url = `${this.pythonApiUrl}/admin/trigger-auto-crawl`;
     this.logger.log(`Triggering manual auto-crawl...`);
@@ -123,6 +156,8 @@ export class AdminService {
     if (dto.website) filterArray.push(`website = "${dto.website}"`);
     if (dto.status) filterArray.push(`status = "${dto.status}"`);
     if (dto.topic) filterArray.push(`site_categories = "${dto.topic}"`);
+    
+    if (dto.sentimentLabel) filterArray.push(`ai_sentiment_label = "${dto.sentimentLabel}"`);
 
     if (dto.startDate) {
         const startTs = new Date(dto.startDate).getTime();
@@ -152,7 +187,11 @@ export class AdminService {
         filter: filterArray.join(' AND '), 
         sort: sort, 
         showMatchesPosition: true,
-        attributesToRetrieve: ['article_id', 'title', 'url', 'site_categories', 'ai_sentiment_score', 'status', 'publish_date', 'website', 'summary']
+        attributesToRetrieve: [
+            'article_id', 'title', 'url', 'site_categories', 
+            'ai_sentiment_score', 'ai_sentiment_label', 
+            'status', 'publish_date', 'website', 'summary'
+        ]
       });
 
       return {
@@ -169,7 +208,6 @@ export class AdminService {
     }
   }
 
-  // Cập nhật trạng thái bài viết (Ẩn/Spam)
   async updateArticleStatus(articleId: string, status: ArticleStatus) {
     const article = await this.articleModel.findByIdAndUpdate(
       articleId, 
@@ -206,7 +244,6 @@ export class AdminService {
         const results = await Promise.allSettled([
             this.meiliService.deleteDocument(articleId),
             
-            // [FIX] Dùng deleteByFilter vì article_id nằm trong payload
             this.qdrantService.deleteByFilter(articleId) 
         ]);
 
@@ -267,6 +304,7 @@ export class AdminService {
                 publish_date: publishTimestamp,
                 url: obj.url,
                 ai_sentiment_score: obj.ai_sentiment_score || 0,
+                ai_sentiment_label: (obj as any).ai_sentiment_label || 'Neutral',
                 site_categories: (obj as any).site_categories,
                 status: (obj as any).status || 'visible'
             });

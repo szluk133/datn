@@ -33,7 +33,10 @@ export class Article {
     user_id: string;
 
     @Prop()
-    ai_sentiment_score: number;
+    ai_sentiment_label: string; // Tích cực, Tiêu cực, Trung tính
+
+    @Prop()
+    ai_sentiment_score: number; // Độ tin cậy của nhãn
 
     @Prop()
     site_categories: string[];
@@ -58,6 +61,7 @@ ArticleSchema.set('toJSON', {
             website: ret.website,
             publish_date: ret.publish_date,
             url: ret.url,
+            ai_sentiment_label: ret.ai_sentiment_label || null,
             ai_sentiment_score: (ret.ai_sentiment_score !== undefined && ret.ai_sentiment_score !== null) ? Number(ret.ai_sentiment_score) : null,
             ai_summary: ret.ai_summary || [],
             site_categories: ret.site_categories || [],

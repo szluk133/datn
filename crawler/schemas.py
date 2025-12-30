@@ -32,3 +32,7 @@ class TopicInDB(TopicBase):
 
 class ScheduleConfig(BaseModel):
     minutes: int = Field(..., gt=5, description="Số phút giữa các lần crawl (tối thiểu 5 phút).")
+
+class UserArticleEnrichRequest(BaseModel):
+    user_id: str = Field(..., description="ID người dùng sở hữu bài viết.")
+    update_id: str = Field(..., description="Mã đợt cập nhật (batch ID).")

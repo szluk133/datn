@@ -14,7 +14,8 @@ import {
     HomeOutlined,
     SearchOutlined,
     ReadOutlined,
-    DatabaseOutlined
+    DatabaseOutlined,
+    FormOutlined
 } from '@ant-design/icons';
 
 const { Header } = Layout;
@@ -54,6 +55,8 @@ const ClientHeader: React.FC = () => {
             setCurrentKey('search');
         } else if (pathname?.startsWith('/model/saved-articles')) {
             setCurrentKey('saved');
+        } else if (pathname?.startsWith('/model/my-article')) {
+            setCurrentKey('my-article');
         } else {
             setCurrentKey('');
         }
@@ -81,6 +84,9 @@ const ClientHeader: React.FC = () => {
                 break;
             case 'saved':
                 router.push('/model/saved-articles');
+                break;
+            case 'my-article':
+                router.push('/model/my-article');
                 break;
             default:
                 break;
@@ -127,6 +133,11 @@ const ClientHeader: React.FC = () => {
             label: 'Thư viện của tôi', 
             key: 'saved', 
             icon: <ReadOutlined /> 
+        },
+        { 
+            label: 'Bài viết của tôi',
+            key: 'my-article', 
+            icon: <FormOutlined /> 
         },
     ];
 
@@ -202,7 +213,7 @@ const ClientHeader: React.FC = () => {
                         menu={{ items: userMenu }} 
                         placement="bottomRight" 
                         trigger={['click']}
-                        styles={{  root: { paddingTop: 12,  }, }}
+                        styles={{ root: { paddingTop: 12 } }}
                     >
                         <Space 
                             style={{ 

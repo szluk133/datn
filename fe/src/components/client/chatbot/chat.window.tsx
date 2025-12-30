@@ -1,12 +1,12 @@
 'use client';
 
 import React, { useRef, useEffect } from 'react';
-import { Spin, Typography, Empty, Avatar, Flex, theme, Space, Tag } from 'antd';
+import { Spin, Typography, Avatar, Flex, theme, Space } from 'antd';
 import { useChatbot } from './chatbot.context';
 import ReactMarkdown from 'react-markdown';
 import Link from 'next/link'; 
 import { SourceDto } from '@/types/next-auth'; 
-import { UserOutlined, RobotOutlined, LinkOutlined } from '@ant-design/icons';
+import { UserOutlined, RobotOutlined } from '@ant-design/icons';
 import { useSession } from 'next-auth/react';
 
 const { Text } = Typography;
@@ -17,41 +17,55 @@ const AnswerRenderer: React.FC<{ answer: string; sources: SourceDto[] | null }> 
     if (!sources || sources.length === 0 || answer === '...') {
         return <ReactMarkdown>{answer}</ReactMarkdown>;
     }
-    const citationRegex = /(\(Nguồn: \[([^\]]+)\]\))/g;
+    
+    const citationRegex = /(\((?:Source|Nguồn|source|nguồn):\s*\[?)([^\])]+)(\]?\))/g;
+
     const parts = answer.split(citationRegex);
     
     return (
         <div style={{ lineHeight: 1.6 }}>
             {parts.map((part, index) => {
-                if ((index - 2) % 3 === 0) {
-                    const fullCitation = parts[index - 1]; 
-                    const title = part; 
-                    const source = sources.find(s => s.title.trim() === title.trim());
+                const type = index % 4;
 
-                    if (source) {
+                if (type === 0) { 
+                    if (!part) return null;
+                    return <ReactMarkdown key={index} components={{ p: 'span' }}>{part}</ReactMarkdown>;
+                }
+
+                if (type === 1) { 
+                    return <Text key={index} type="secondary">{part}</Text>;
+                }
+
+                if (type === 2) { 
+                    const title = part ? part.trim() : "";
+                    const source = sources.find(s => s.title.trim().toLowerCase() === title.toLowerCase());
+
+                    if (source && source._id) {
                         return (
-                            <Link href={`/model/article/${source.article_id}`} key={index} passHref legacyBehavior>
-                                <Tag 
-                                    icon={<LinkOutlined />} 
-                                    color="blue" 
-                                    style={{ cursor: 'pointer', margin: '0 4px', borderRadius: 12 }}
-                                >
-                                    <span style={{ maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', display: 'inline-block', verticalAlign: 'bottom' }}>
-                                        {title}
-                                    </span>
-                                </Tag>
+                            <Link 
+                                href={`/model/article/${source._id}`} 
+                                key={index}
+                                style={{ 
+                                    color: token.colorPrimary,
+                                    cursor: 'pointer',
+                                    fontWeight: 500,
+                                    textDecoration: 'none',
+                                }} 
+                                title={`Xem bài viết: ${title}`}
+                                onMouseEnter={(e) => e.currentTarget.style.textDecoration = 'underline'}
+                                onMouseLeave={(e) => e.currentTarget.style.textDecoration = 'none'}
+                            >
+                                {part}
                             </Link>
                         );
                     }
-                    return <Text type="secondary" style={{ fontSize: 12 }} key={index}>{fullCitation}</Text>;
+                    return <Text key={index} strong>{part}</Text>;
                 }
-                
-                if ((index - 1) % 3 === 0) return null;
 
-                if (index % 3 === 0 && part) {
-                    return <ReactMarkdown key={index} components={{ p: 'span' }}>{part}</ReactMarkdown>;
+                if (type === 3) { 
+                    return <Text key={index} type="secondary">{part}</Text>;
                 }
-                
+
                 return null;
             })}
         </div>

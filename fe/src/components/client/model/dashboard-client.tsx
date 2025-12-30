@@ -25,10 +25,14 @@ import {
     ArrowRightOutlined,
     ThunderboltFilled,
     StockOutlined,
-    LineChartOutlined
+    LineChartOutlined,
+    FormOutlined,
+    PieChartOutlined
 } from "@ant-design/icons";
 
 import ArticleList from "@/components/client/article/article.list"; 
+import DashboardSources from "@/components/admin/dashboard/dashboard.sources";
+import DashboardCategories from "@/components/admin/dashboard/dashboard.categories";
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -79,10 +83,10 @@ const DashboardClient = () => {
                                         Khám phá Dữ liệu
                                     </Button>
                                 </Link>
-                                <Link href="/model/saved-articles">
-                                    <Button ghost size="large" icon={<ReadOutlined />} 
+                                <Link href="/model/my-article">
+                                    <Button ghost size="large" icon={<FormOutlined />} 
                                         style={{ height: 50, padding: '0 32px', borderRadius: 25, fontSize: 16, color: 'white', borderColor: 'rgba(255,255,255,0.6)' }}>
-                                        Thư viện của tôi
+                                        Tạo bài viết mới
                                     </Button>
                                 </Link>
                             </Space>
@@ -126,20 +130,22 @@ const DashboardClient = () => {
             </div>
 
             <Title level={3} style={{ marginBottom: 24, fontWeight: 600 }}>Chức năng chính</Title>
+            
+            {/* Cập nhật Grid từ 3 cột (md=8) sang 4 cột (xl=6) */}
             <Row gutter={[24, 24]} style={{ marginBottom: 48 }}>
-                <Col xs={24} md={8}>
+                <Col xs={24} sm={12} xl={6}>
                     <Link href="/model/search-available">
                         <Card hoverable style={cardStyle} styles={{ body: { padding: 32, height: '100%', display: 'flex', flexDirection: 'column' } }}>
                             <div style={{ marginBottom: 20 }}>
                                 <Avatar size={64} icon={<GlobalOutlined />} style={{ backgroundColor: '#e6f7ff', color: '#1890ff', marginBottom: 16 }} />
                                 <Title level={4}>Dữ liệu Sẵn có</Title>
                                 <Paragraph type="secondary" style={{ flex: 1 }}>
-                                    Truy cập nhanh kho dữ liệu đã được thu thập và phân tích trong <strong>2 tháng gần nhất</strong> từ các nguồn chính thống.
+                                    Truy cập nhanh kho dữ liệu đã được thu thập và phân tích trong <strong>2 tháng gần nhất</strong>.
                                 </Paragraph>
                             </div>
                             <div style={{ marginTop: 'auto' }}>
                                 <Space orientation="vertical" style={{ width: '100%' }}>
-                                    <Text type="secondary" style={{ fontSize: 12 }}><span style={{ color: '#52c41a' }}>●</span> VnEconomy, VnExpress, CafeF</Text>
+                                    <Text type="secondary" style={{ fontSize: 12 }}><span style={{ color: '#52c41a' }}>●</span> VnEconomy, VnExpress...</Text>
                                     <Text strong style={{ color: '#1890ff', display: 'flex', alignItems: 'center', gap: 8 }}>
                                         Truy cập ngay <ArrowRightOutlined />
                                     </Text>
@@ -149,14 +155,14 @@ const DashboardClient = () => {
                     </Link>
                 </Col>
 
-                <Col xs={24} md={8}>
+                <Col xs={24} sm={12} xl={6}>
                     <Link href="/model/search">
                         <Card hoverable style={cardStyle} styles={{ body: { padding: 32, height: '100%', display: 'flex', flexDirection: 'column' } }}>
                             <div style={{ marginBottom: 20 }}>
                                 <Avatar size={64} icon={<FilterOutlined />} style={{ backgroundColor: '#f6ffed', color: '#52c41a', marginBottom: 16 }} />
                                 <Title level={4}>Tìm kiếm Chuyên sâu</Title>
                                 <Paragraph type="secondary" style={{ flex: 1 }}>
-                                    Công cụ lọc mạnh mẽ theo từ khóa (keyword), nội dung, khoảng thời gian cụ thể và số lượng bài viết mong muốn.
+                                    Công cụ lọc mạnh mẽ theo từ khóa, nội dung, và khoảng thời gian cụ thể.
                                 </Paragraph>
                             </div>
                             <div style={{ marginTop: 'auto' }}>
@@ -171,14 +177,36 @@ const DashboardClient = () => {
                     </Link>
                 </Col>
 
-                <Col xs={24} md={8}>
+                <Col xs={24} sm={12} xl={6}>
+                    <Link href="/model/my-article">
+                        <Card hoverable style={cardStyle} styles={{ body: { padding: 32, height: '100%', display: 'flex', flexDirection: 'column' } }}>
+                            <div style={{ marginBottom: 20 }}>
+                                <Avatar size={64} icon={<FormOutlined />} style={{ backgroundColor: '#f9f0ff', color: '#722ed1', marginBottom: 16 }} />
+                                <Title level={4}>Bài viết của tôi</Title>
+                                <Paragraph type="secondary" style={{ flex: 1 }}>
+                                    Tạo thủ công hoặc <strong>Import Excel</strong>. Tự động phân tích AI cho dữ liệu riêng của bạn.
+                                </Paragraph>
+                            </div>
+                            <div style={{ marginTop: 'auto' }}>
+                                <Space orientation="vertical" style={{ width: '100%' }}>
+                                    <Text type="secondary" style={{ fontSize: 12 }}><span style={{ color: '#722ed1' }}>●</span> Quản lý & Phân tích AI</Text>
+                                    <Text strong style={{ color: '#722ed1', display: 'flex', alignItems: 'center', gap: 8 }}>
+                                        Thêm mới ngay <ArrowRightOutlined />
+                                    </Text>
+                                </Space>
+                            </div>
+                        </Card>
+                    </Link>
+                </Col>
+
+                <Col xs={24} sm={12} xl={6}>
                     <Link href="/model/saved-articles">
                         <Card hoverable style={cardStyle} styles={{ body: { padding: 32, height: '100%', display: 'flex', flexDirection: 'column' } }}>
                             <div style={{ marginBottom: 20 }}>
                                 <Avatar size={64} icon={<ReadOutlined />} style={{ backgroundColor: '#fff7e6', color: '#faad14', marginBottom: 16 }} />
                                 <Title level={4}>Thư viện của tôi</Title>
                                 <Paragraph type="secondary" style={{ flex: 1 }}>
-                                    Quản lý các bài báo quan trọng bạn đã đánh dấu. Dễ dàng xem lại lịch sử nghiên cứu và báo cáo đã lưu.
+                                    Quản lý các bài báo quan trọng bạn đã đánh dấu từ hệ thống.
                                 </Paragraph>
                             </div>
                             <div style={{ marginTop: 'auto' }}>
@@ -208,7 +236,7 @@ const DashboardClient = () => {
                             items={[
                                 { 
                                     title: 'Thu thập', 
-                                    content: 'Quét dữ liệu Real-time', 
+                                    content: 'Quét dữ liệu & Import Excel', 
                                     icon: <DatabaseOutlined style={{ fontSize: 24, color: '#1890ff' }} /> 
                                 },
                                 { 
@@ -226,6 +254,16 @@ const DashboardClient = () => {
                     </Col>
                 </Row>
             </Card>
+
+            <Title level={3} style={{ marginBottom: 24, fontWeight: 600 }}>Thống kê thị trường</Title>
+            <Row gutter={[24, 24]} style={{ marginBottom: 48 }}>
+                <Col xs={24} lg={12}>
+                    <DashboardSources />
+                </Col>
+                <Col xs={24} lg={12}>
+                    <DashboardCategories />
+                </Col>
+            </Row>
 
             <div style={{ marginBottom: 24, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <Title level={3} style={{ margin: 0 }}>

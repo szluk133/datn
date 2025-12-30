@@ -1,8 +1,8 @@
 'use client'
 
 import React, { useEffect, useState } from 'react';
-import { Table, Tag, Button, Input, Select, Card, DatePicker, Row, Col, Slider, Typography, theme, Empty } from 'antd';
-import { SearchOutlined, FilterOutlined, ReloadOutlined, GlobalOutlined, CalendarOutlined } from '@ant-design/icons';
+import { Table, Tag, Button, Input, Select, Card, DatePicker, Row, Col, Slider, Typography, theme, Empty, Tooltip, Space, Flex } from 'antd';
+import { SearchOutlined, FilterOutlined, ReloadOutlined, SmileFilled, FrownFilled, MehFilled, InfoCircleOutlined } from '@ant-design/icons';
 import { useSession } from 'next-auth/react';
 import { sendRequest } from '@/utils/api';
 import { IAdminArticle, ITopic } from '@/types/next-auth';
@@ -33,6 +33,7 @@ interface IProps {
     };
 }
 
+// Hàm highlight text giữ nguyên
 const convertByteIndexToCharIndex = (str: string, byteStart: number, byteLength: number) => {
     let currentByteCount = 0;
     let charStart = -1;
@@ -100,17 +101,22 @@ const SearchClient = (props: IProps) => {
         return [start ? dayjs(start) : null, end ? dayjs(end) : null];
     });
 
-    const [sentimentRange, setSentimentRange] = useState<[number, number]>(() => {
+    // State mới cho Label
+    const [sentimentLabel, setSentimentLabel] = useState<string | undefined>(searchParams.get('sentimentLabel') || undefined);
+
+    // State cho Confidence (Độ tin cậy): 0 -> 1
+    const [confidenceRange, setConfidenceRange] = useState<[number, number]>(() => {
         const min = searchParams.get('minSentiment');
         const max = searchParams.get('maxSentiment');
-        return [min ? parseFloat(min) : -1, max ? parseFloat(max) : 1];
+        // Mặc định là 0 - 1 (Toàn bộ dải độ tin cậy)
+        return [min ? parseFloat(min) : 0, max ? parseFloat(max) : 1];
     });
 
     const [topicsList, setTopicsList] = useState<ITopic[]>([]);
     
     const [isAdvancedVisible, setIsAdvancedVisible] = useState(() => {
         const hasDate = searchParams.get('startDate') || searchParams.get('endDate');
-        const hasSentiment = searchParams.get('minSentiment') || searchParams.get('maxSentiment');
+        const hasSentiment = searchParams.get('minSentiment') || searchParams.get('maxSentiment') || searchParams.get('sentimentLabel');
         const hasSort = searchParams.get('sort');
         return !!(hasDate || hasSentiment || hasSort);
     });
@@ -120,6 +126,7 @@ const SearchClient = (props: IProps) => {
         setKeyword(searchParams.get('q') || '');
         setWebsite(searchParams.get('website') || undefined);
         setTopic(searchParams.get('topic') || undefined);
+        setSentimentLabel(searchParams.get('sentimentLabel') || undefined);
         
         const start = searchParams.get('startDate');
         const end = searchParams.get('endDate');
@@ -127,7 +134,7 @@ const SearchClient = (props: IProps) => {
         
         const min = searchParams.get('minSentiment');
         const max = searchParams.get('maxSentiment');
-        if (min || max) setSentimentRange([min ? parseFloat(min) : -1, max ? parseFloat(max) : 1]);
+        if (min || max) setConfidenceRange([min ? parseFloat(min) : 0, max ? parseFloat(max) : 1]);
         
     }, [searchParams]);
 
@@ -173,6 +180,7 @@ const SearchClient = (props: IProps) => {
         if (website) params.set('website', website); else params.delete('website');
         if (topic) params.set('topic', topic); else params.delete('topic');
         if (sort) params.set('sort', sort); else params.delete('sort');
+        
         if (dateRange[0] && dateRange[1]) {
             params.set('startDate', dateRange[0].format('YYYY-MM-DD'));
             params.set('endDate', dateRange[1].format('YYYY-MM-DD'));
@@ -180,13 +188,19 @@ const SearchClient = (props: IProps) => {
             params.delete('startDate');
             params.delete('endDate');
         }
-        if (sentimentRange[0] !== -1 || sentimentRange[1] !== 1) {
-            params.set('minSentiment', sentimentRange[0].toString());
-            params.set('maxSentiment', sentimentRange[1].toString());
+
+        // Handle Label
+        if (sentimentLabel) params.set('sentimentLabel', sentimentLabel); else params.delete('sentimentLabel');
+
+        // Handle Confidence (chỉ set khi khác mặc định 0-1)
+        if (confidenceRange[0] !== 0 || confidenceRange[1] !== 1) {
+            params.set('minSentiment', confidenceRange[0].toString());
+            params.set('maxSentiment', confidenceRange[1].toString());
         } else {
             params.delete('minSentiment');
             params.delete('maxSentiment');
         }
+
         params.set('page', '1');
         router.replace(`${pathname}?${params.toString()}`);
     };
@@ -198,7 +212,8 @@ const SearchClient = (props: IProps) => {
         setTopic(undefined);
         setSort(undefined);
         setDateRange([null, null]);
-        setSentimentRange([-1, 1]);
+        setSentimentLabel(undefined);
+        setConfidenceRange([0, 1]);
     };
 
     const currentSort = searchParams.get('sort');
@@ -268,34 +283,55 @@ const SearchClient = (props: IProps) => {
             render: (text: string) => <Tag color="blue">{text}</Tag>,
         },
         {
-            title: 'Danh mục',
-            dataIndex: 'site_categories',
-            key: 'categories',
-            width: 150,
-            render: (cats: string[]) => (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                    {cats?.slice(0, 3).map((c, i) => <Tag key={i} style={{ fontSize: 11 }}>{c}</Tag>)}
-                    {cats?.length > 3 && <Tag style={{ fontSize: 11 }}>...</Tag>}
-                </div>
-            ),
-        },
-        {
-            title: 'Cảm xúc',
+            title: 'Cảm xúc & Độ tin cậy',
             dataIndex: 'ai_sentiment_score',
             key: 'sentiment',
-            width: 100,
+            width: 180,
             sorter: true,
             sortOrder: sentimentSortOrder, 
-            render: (score: number) => {
+            render: (_: any, record: any) => {
+                // Logic hiển thị mới: Dùng Label làm chính, Score làm độ tin cậy
+                const label = record.ai_sentiment_label || 'Unknown';
+                const score = record.ai_sentiment_score ?? 0;
+                
                 let color = 'default';
-                if (score >= 0.25) color = 'success';
-                else if (score <= -0.25) color = 'error';
-                else if (score !== undefined) color = 'warning';
-                return score !== undefined ? (
-                    <Tag color={color} style={{ minWidth: 50, textAlign: 'center' }}>
-                        {score.toFixed(2)}
-                    </Tag>
-                ) : <span style={{ color: '#ccc' }}>N/A</span>;
+                let icon = <MehFilled />;
+                let labelVi = 'Chưa phân tích';
+                
+                // Chuẩn hóa label về chữ thường để so sánh
+                const lowerLabel = label.toLowerCase();
+
+                if (['positive', 'tích cực'].includes(lowerLabel)) {
+                    color = 'success';
+                    icon = <SmileFilled />;
+                    labelVi = 'Tích cực';
+                } else if (['negative', 'tiêu cực'].includes(lowerLabel)) {
+                    color = 'error';
+                    icon = <FrownFilled />;
+                    labelVi = 'Tiêu cực';
+                } else if (['neutral', 'trung tính'].includes(lowerLabel)) {
+                    color = 'warning';
+                    icon = <MehFilled />;
+                    labelVi = 'Trung tính';
+                }
+
+                if (record.ai_sentiment_score === undefined) {
+                    return <span style={{ color: '#ccc' }}>N/A</span>;
+                }
+
+                return (
+                    <Flex vertical gap={4} align="start">
+                        <Tag color={color} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                            {icon} {labelVi}
+                        </Tag>
+                        <Tooltip title="Độ tin cậy của AI">
+                            <Space size={4} style={{ fontSize: 12, color: token.colorTextSecondary }}>
+                                <InfoCircleOutlined /> 
+                                {(score * 100).toFixed(0)}%
+                            </Space>
+                        </Tooltip>
+                    </Flex>
+                );
             }
         },
         {
@@ -315,6 +351,7 @@ const SearchClient = (props: IProps) => {
                             siteCategories={record.site_categories}
                             summary={record.summary}
                             aiSentimentScore={record.ai_sentiment_score}
+                            aiSentimentLabel={record.ai_sentiment_label} // Truyền thêm label
                             publishDate={record.publish_date}
                             size="middle"
                             type="text"
@@ -392,8 +429,8 @@ const SearchClient = (props: IProps) => {
                         border: '1px solid #f0f0f0'
                     }}>
                         <Row gutter={[24, 16]} align="middle">
-                            <Col xs={24} md={12} lg={10}>
-                                <Text strong style={{ marginRight: 8 }}>Khoảng thời gian:</Text>
+                            <Col xs={24} md={12} lg={8}>
+                                <Text strong style={{ display: 'block', marginBottom: 8 }}>Khoảng thời gian:</Text>
                                 <RangePicker 
                                     style={{ width: '100%' }}
                                     value={dateRange}
@@ -402,28 +439,42 @@ const SearchClient = (props: IProps) => {
                                     placeholder={['Từ ngày', 'Đến ngày']}
                                 />
                             </Col>
-                            <Col xs={24} md={12} lg={8}>
-                                <div style={{ display: 'flex', alignItems: 'center' }}>
-                                    <Text strong style={{ marginRight: 16, whiteSpace: 'nowrap' }}>Cảm xúc:</Text>
-                                    <div style={{ flex: 1 }}>
-                                        <Slider
-                                            range
-                                            min={-1}
-                                            max={1}
-                                            step={0.1}
-                                            value={sentimentRange}
-                                            onChange={(val) => setSentimentRange(val as [number, number])}
-                                            marks={{
-                                                '-1': { style: { color: '#ff4d4f' }, label: 'Tiêu cực' },
-                                                '0': 'Trung tính',
-                                                '1': { style: { color: '#52c41a' }, label: 'Tích cực' }
-                                            }}
+                            <Col xs={24} md={12} lg={10}>
+                                <Text strong style={{ display: 'block', marginBottom: 8 }}>Bộ lọc cảm xúc AI:</Text>
+                                <Row gutter={12}>
+                                    <Col span={10}>
+                                        <Select
+                                            placeholder="Chọn nhãn"
+                                            style={{ width: '100%' }}
+                                            allowClear
+                                            value={sentimentLabel}
+                                            onChange={setSentimentLabel}
+                                            options={[
+                                                { value: 'Positive', label: <Space><SmileFilled style={{ color: '#52c41a' }} /> Tích cực</Space> },
+                                                { value: 'Negative', label: <Space><FrownFilled style={{ color: '#ff4d4f' }} /> Tiêu cực</Space> },
+                                                { value: 'Neutral', label: <Space><MehFilled style={{ color: '#faad14' }} /> Trung tính</Space> },
+                                            ]}
                                         />
-                                    </div>
-                                </div>
+                                    </Col>
+                                    <Col span={14}>
+                                        <div style={{ display: 'flex', alignItems: 'center' }}>
+                                            <span style={{ fontSize: 12, color: '#888', marginRight: 8, whiteSpace: 'nowrap' }}>Độ tin cậy:</span>
+                                            <Slider
+                                                range
+                                                min={0}
+                                                max={1}
+                                                step={0.05}
+                                                style={{ flex: 1 }}
+                                                value={confidenceRange}
+                                                onChange={(val) => setConfidenceRange(val as [number, number])}
+                                                tooltip={{ formatter: (val) => `${Math.round((val || 0) * 100)}%` }}
+                                            />
+                                        </div>
+                                    </Col>
+                                </Row>
                             </Col>
                             <Col xs={24} md={12} lg={6}>
-                                <Text strong style={{ marginRight: 8 }}>Sắp xếp:</Text>
+                                <Text strong style={{ display: 'block', marginBottom: 8 }}>Sắp xếp:</Text>
                                 <Select 
                                     placeholder="Sắp xếp kết quả" 
                                     style={{ width: '100%' }} 
@@ -431,8 +482,8 @@ const SearchClient = (props: IProps) => {
                                     value={sort}
                                     onChange={val => setSort(val)}
                                 >
-                                    <Option value="ai_sentiment_score:desc">Tích cực nhất (Giảm dần)</Option>
-                                    <Option value="ai_sentiment_score:asc">Tiêu cực nhất (Tăng dần)</Option>
+                                    <Option value="ai_sentiment_score:desc">Độ tin cậy cao nhất</Option>
+                                    <Option value="ai_sentiment_score:asc">Độ tin cậy thấp nhất</Option>
                                     <Option value="publish_date:desc">Mới nhất</Option>
                                     <Option value="publish_date:asc">Cũ nhất</Option>
                                 </Select>

@@ -207,24 +207,22 @@ export class ArticleService {
                                 _id: null,
                                 positive: { 
                                     $sum: { 
-                                        $cond: [{ $gt: ["$ai_sentiment_score", 0.25] }, 1, 0] 
+                                        $cond: [{ $in: ["$ai_sentiment_label", ["Tích cực", "Positive"]] }, 1, 0] 
                                     } 
                                 },
                                 negative: { 
                                     $sum: { 
-                                        $cond: [{ $lt: ["$ai_sentiment_score", -0.25] }, 1, 0] 
+                                        $cond: [{ $in: ["$ai_sentiment_label", ["Tiêu cực", "Negative"]] }, 1, 0] 
                                     } 
                                 },
                                 neutral: { 
                                     $sum: { 
                                         $cond: [
                                             { $or: [
-                                                { $and: [
-                                                    { $gte: ["$ai_sentiment_score", -0.25] },
-                                                    { $lte: ["$ai_sentiment_score", 0.25] }
-                                                ]},
-                                                { $eq: ["$ai_sentiment_score", null] },
-                                                { $eq: ["$ai_sentiment_score", undefined] }
+                                                { $in: ["$ai_sentiment_label", ["Trung tính", "Neutral"]] },
+                                                { $eq: ["$ai_sentiment_label", null] },
+                                                { $eq: ["$ai_sentiment_label", undefined] },
+                                                { $eq: ["$ai_sentiment_label", ""] }
                                             ]}, 1, 0
                                         ] 
                                     } 
@@ -250,6 +248,7 @@ export class ArticleService {
             website: article.website,
             publish_date: article.publish_date,
             url: article.url,
+            ai_sentiment_label: article.ai_sentiment_label || null,
             ai_sentiment_score: (article.ai_sentiment_score !== undefined && article.ai_sentiment_score !== null) ? Number(article.ai_sentiment_score) : null,
             ai_summary: article.ai_summary || [],
             site_categories: article.site_categories || [],
@@ -459,7 +458,8 @@ export class ArticleService {
             { header: 'Website', key: 'website', width: 20 },
             { header: 'Ngày xuất bản', key: 'publish_date', width: 20 },
             { header: 'URL', key: 'url', width: 60 },
-            { header: 'Cảm xúc (Score)', key: 'ai_sentiment_score', width: 15 },
+            { header: 'Cảm xúc', key: 'ai_sentiment_label', width: 15 },
+            { header: 'Độ tin cậy (Score)', key: 'ai_sentiment_score', width: 15 },
         ];
         worksheet.addRows(articles.map(a => ({
             title: a.title, 
@@ -468,6 +468,7 @@ export class ArticleService {
             website: a.website, 
             publish_date: a.publish_date, 
             url: a.url, 
+            ai_sentiment_label: a.ai_sentiment_label || '',
             ai_sentiment_score: (a.ai_sentiment_score !== undefined && a.ai_sentiment_score !== null) ? Number(a.ai_sentiment_score) : 0
         })));
         const arrayBuffer = await workbook.xlsx.writeBuffer();

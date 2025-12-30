@@ -21,6 +21,9 @@ const ArticleSearchPage = async ({
 
     const startDate = params.startDate ? String(params.startDate) : "";
     const endDate = params.endDate ? String(params.endDate) : "";
+    
+    // Cập nhật: Thêm sentimentLabel và giữ min/max sentiment cho độ tin cậy
+    const sentimentLabel = params.sentimentLabel ? String(params.sentimentLabel) : "";
     const minSentiment = params.minSentiment ? String(params.minSentiment) : "";
     const maxSentiment = params.maxSentiment ? String(params.maxSentiment) : "";
 
@@ -42,6 +45,9 @@ const ArticleSearchPage = async ({
 
     if (startDate) apiParams.append('startDate', startDate);
     if (endDate) apiParams.append('endDate', endDate);
+    
+    // Thêm tham số mới vào API call
+    if (sentimentLabel) apiParams.append('sentimentLabel', sentimentLabel);
     if (minSentiment) apiParams.append('minSentiment', minSentiment);
     if (maxSentiment) apiParams.append('maxSentiment', maxSentiment);
 

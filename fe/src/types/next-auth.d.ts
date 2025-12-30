@@ -11,6 +11,7 @@ export interface IArticle {
     url: string;
     content?: string;
     ai_sentiment_score?: number;
+    ai_sentiment_label?: string;
     site_categories?: string[];
     ai_summary?: string[];
     status: 'visible' | 'hidden' | 'spam';
@@ -43,7 +44,7 @@ export interface IUser {
 
 // CHATBOT
 export interface SourceDto {
-    article_id: string;
+    _id: string;
     title: string;
     answer_part: string | null;
 }
@@ -62,16 +63,19 @@ export interface IConversation {
     title: string;
 }
 
-// ADMIN
+// ADMIN & ANALYTICS
 export interface IAdminStats {
     totalArticles: number;
     topSources: { _id: string; count: number }[];
     sentiment: {
-        avgSentiment: number;
+        avgConfidence: number;
         positive: number;
         negative: number;
+        neutral: number;
+        undefined?: number;
     };
     crawledToday: number;
+    searchesToday: number;
 }
 
 export interface IKeywordTrend {
@@ -82,7 +86,7 @@ export interface IKeywordTrend {
 
 export interface ISentimentTrend {
     date: string;
-    avgSentiment: number;
+    avgConfidence: number;
     totalArticles: number;
     breakdown: {
         positive: number;
@@ -102,7 +106,7 @@ export interface ISystemLog {
 
 export interface ISourceSentiment {
     source: string;
-    avgSentiment: number;
+    avgConfidence: number;
     total: number;
     breakdown: {
         positive: number;
@@ -126,6 +130,7 @@ export interface IAdminArticle {
     publish_date: string;
     url: string;
     ai_sentiment_score: number;
+    ai_sentiment_label?: string;
     site_categories: string[];
     status: 'visible' | 'hidden' | 'spam';
 }
@@ -152,7 +157,6 @@ declare module "next-auth" {
 }
 
 declare module "next-auth/jwt" {
-
     interface JWT {
         user: IUser;
         access_token: string;

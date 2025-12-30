@@ -3,7 +3,7 @@ from typing import Optional
 import sys
 from config import (
     MONGO_URI, DATABASE_NAME, COLLECTION_NAME, HISTORY_COLLECTION_NAME, 
-    SCHEDULED_JOBS_COLLECTION, TOPICS_COLLECTION_NAME,
+    SCHEDULED_JOBS_COLLECTION, TOPICS_COLLECTION_NAME, MY_COLLECTION_NAME,
     QDRANT_URL, QDRANT_API_KEY, MEILISEARCH_URL, MEILISEARCH_KEY
 )
 from qdrant_client import AsyncQdrantClient
@@ -48,6 +48,7 @@ def get_db() -> motor.motor_asyncio.AsyncIOMotorDatabase:
 def get_articles_collection(): return db[COLLECTION_NAME]
 def get_history_collection(): return db[HISTORY_COLLECTION_NAME]
 def get_scheduled_jobs_collection(): return db[SCHEDULED_JOBS_COLLECTION]
-def get_topics_collection(): return db[TOPICS_COLLECTION_NAME] # MỚI
+def get_topics_collection(): return db[TOPICS_COLLECTION_NAME]
+def get_my_articles_collection(): return db[MY_COLLECTION_NAME]
 def get_qdrant_client(): return qdrant_client
 def get_meili_client(): return meili_client

@@ -11,7 +11,6 @@ export class AnalyticsService {
         @InjectModel(SearchHistory.name) private searchHistoryModel: Model<SearchHistoryDocument>,
     ) {}
 
-  // 1. Phát hiện từ khóa Hot
     async getHotKeywords(days: number) {
         const since = new Date();
         since.setDate(since.getDate() - days);
@@ -43,7 +42,6 @@ export class AnalyticsService {
         };
     }
 
-    // 2. Biểu đồ xu hướng cảm xúc
     async getSentimentTrend(days?: number, fromDateStr?: string, toDateStr?: string) {
         let startDate: Date;
         let endDate: Date = new Date();
@@ -69,7 +67,7 @@ export class AnalyticsService {
         const trend = await this.articleModel.aggregate([
             { 
                 $match: { 
-                    ai_sentiment_score: { $exists: true, $ne: null }
+                    ai_sentiment_label: { $exists: true, $ne: "" } 
                 }
             },
             {
@@ -92,20 +90,22 @@ export class AnalyticsService {
                         month: { $month: "$convertedDate" }, 
                         day: { $dayOfMonth: "$convertedDate" } 
                     },
-                    avgSentiment: { $avg: "$ai_sentiment_score" },
+                    avgConfidence: { $avg: "$ai_sentiment_score" },
                     totalArticles: { $sum: 1 },
-                    positiveCount: { $sum: { $cond: [{ $gt: ["$ai_sentiment_score", 0.2] }, 1, 0] } },
-                    negativeCount: { $sum: { $cond: [{ $lt: ["$ai_sentiment_score", -0.2] }, 1, 0] } },
+                    
+                    positiveCount: { 
+                        $sum: { 
+                            $cond: [{ $in: [{ $toLower: "$ai_sentiment_label" }, ["positive", "tích cực"]] }, 1, 0] 
+                        } 
+                    },
+                    negativeCount: { 
+                        $sum: { 
+                            $cond: [{ $in: [{ $toLower: "$ai_sentiment_label" }, ["negative", "tiêu cực"]] }, 1, 0] 
+                        } 
+                    },
                     neutralCount: { 
                         $sum: { 
-                            $cond: [
-                                { $and: [
-                                    { $gte: ["$ai_sentiment_score", -0.2] }, 
-                                    { $lte: ["$ai_sentiment_score", 0.2] }
-                                ]}, 
-                                1, 
-                                0
-                            ] 
+                            $cond: [{ $in: [{ $toLower: "$ai_sentiment_label" }, ["neutral", "trung tính"]] }, 1, 0] 
                         } 
                     }
                 }
@@ -115,7 +115,7 @@ export class AnalyticsService {
 
         return trend.map(t => ({
             date: `${t._id.day}/${t._id.month}/${t._id.year}`,
-            avgSentiment: parseFloat(t.avgSentiment.toFixed(2)),
+            avgConfidence: parseFloat((t.avgConfidence || 0).toFixed(2)),
             totalArticles: t.totalArticles,
             breakdown: {
                 positive: t.positiveCount,
@@ -123,9 +123,8 @@ export class AnalyticsService {
                 neutral: t.neutralCount
             }
         }));
-        }
+    }
 
-    // 3. Báo cáo tổng hợp
     async getSummaryReport() {
         const days = 30; 
         const [hotKeywords, sentimentTrend] = await Promise.all([
@@ -143,51 +142,51 @@ export class AnalyticsService {
         };
     }
 
-    // So sánh cảm xúc giữa các nguồn báo
     async getSourceSentimentComparison() {
         const stats = await this.articleModel.aggregate([
         { 
             $match: { 
-            ai_sentiment_score: { $exists: true, $ne: null } 
+                ai_sentiment_label: { $exists: true, $ne: "" } 
             } 
         },
         {
             $group: {
-            _id: "$website",
-            avgSentiment: { $avg: "$ai_sentiment_score" },
-            totalArticles: { $sum: 1 },
-            positiveCount: { $sum: { $cond: [{ $gt: ["$ai_sentiment_score", 0.2] }, 1, 0] } },
-            negativeCount: { $sum: { $cond: [{ $lt: ["$ai_sentiment_score", -0.2] }, 1, 0] } },
-            neutralCount: { 
-                $sum: { 
-                    $cond: [
-                        { $and: [
-                            { $gte: ["$ai_sentiment_score", -0.2] }, 
-                            { $lte: ["$ai_sentiment_score", 0.2] }
-                        ]}, 
-                        1, 
-                        0
-                    ] 
-                } 
-            }
+                _id: "$website",
+                avgConfidence: { $avg: "$ai_sentiment_score" },
+                totalArticles: { $sum: 1 },
+                
+                positiveCount: { 
+                    $sum: { 
+                        $cond: [{ $in: [{ $toLower: "$ai_sentiment_label" }, ["positive", "tích cực"]] }, 1, 0] 
+                    } 
+                },
+                negativeCount: { 
+                    $sum: { 
+                        $cond: [{ $in: [{ $toLower: "$ai_sentiment_label" }, ["negative", "tiêu cực"]] }, 1, 0] 
+                    } 
+                },
+                neutralCount: { 
+                    $sum: { 
+                        $cond: [{ $in: [{ $toLower: "$ai_sentiment_label" }, ["neutral", "trung tính"]] }, 1, 0] 
+                    } 
+                }
             }
         },
-        { $sort: { avgSentiment: -1 } } // Sắp xếp từ tích cực nhất đến tiêu cực nhất
+        { $sort: { positiveCount: -1 } } 
         ]);
 
         return stats.map(item => ({
-        source: item._id,
-        avgSentiment: parseFloat(item.avgSentiment.toFixed(2)),
-        total: item.totalArticles,
-        breakdown: {
-            positive: item.positiveCount,
-            negative: item.negativeCount,
-            neutral: item.neutralCount
-        }
+            source: item._id,
+            avgConfidence: parseFloat((item.avgConfidence || 0).toFixed(2)),
+            total: item.totalArticles,
+            breakdown: {
+                positive: item.positiveCount,
+                negative: item.negativeCount,
+                neutral: item.neutralCount
+            }
         }));
     }
 
-    // Phân phối danh mục (Pie Chart)
     async getCategoryDistribution() {
         const distribution = await this.articleModel.aggregate([
         { $unwind: "$site_categories" },

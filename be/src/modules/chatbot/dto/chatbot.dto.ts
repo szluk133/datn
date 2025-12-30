@@ -6,6 +6,7 @@ export enum PageContext {
     HOME_PAGE = 'home_page',
     LIST_PAGE = 'list_page',
     DETAIL_PAGE = 'detail_page',
+    MY_PAGE = 'my_page',
 }
 
 export enum SortBy {
@@ -33,6 +34,10 @@ export class ContextDto {
 
     @IsOptional()
     @IsString()
+    update_id?: string;
+
+    @IsOptional()
+    @IsString()
     sort_by?: string;
 
     @IsOptional()
@@ -42,7 +47,7 @@ export class ContextDto {
 
 export class SourceDto {
     @IsString()
-    article_id: string;
+    _id: string;
 
     @IsString()
     title: string;
@@ -89,13 +94,7 @@ export class ChatResponseDto {
     @Type(() => SourceDto)
     sources: SourceDto[] | null;
 
-    @IsOptional()
-    @IsString()
-    intent_detected?: string;
-
-    @IsOptional()
-    @IsString()
-    strategy_used?: string;
+    // Đã xóa intent_detected, strategy_used
 }
 
 export class ConversationHistoryDto {
@@ -110,12 +109,6 @@ export class MessageHistoryDto {
     answer: string;
     created_at: Date;
     
-    @IsOptional()
-    intent_detected?: string;
-
-    @IsOptional()
-    strategy_used?: string;
-
     @IsOptional()
     @ValidateNested({ each: true })
     @Type(() => SourceDto)

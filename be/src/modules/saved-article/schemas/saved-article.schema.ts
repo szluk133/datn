@@ -27,6 +27,9 @@ export class SavedArticle {
     summary: string;
 
     @Prop()
+    ai_sentiment_label: string;
+
+    @Prop()
     ai_sentiment_score: number;
 
     @Prop({ type: Date })

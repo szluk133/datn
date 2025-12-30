@@ -87,6 +87,7 @@ const ArticleDetailPage = async ({
                         website={article.website}
                         publish_date={getISODate(article.publish_date)}
                         ai_sentiment_score={article.ai_sentiment_score}
+                        ai_sentiment_label={article.ai_sentiment_label}
                         ai_summary={article.ai_summary}
                         site_categories={article.site_categories}
                         url={article.url}

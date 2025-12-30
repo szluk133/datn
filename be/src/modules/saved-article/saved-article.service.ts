@@ -68,7 +68,10 @@ export class SavedArticleService {
         website: doc.website,
         summary: doc.summary,
         site_categories: doc.site_categories,
-        ai_sentiment_score: doc.ai_sentiment_score,
+        
+        ai_sentiment_label: doc.ai_sentiment_label || null,
+        ai_sentiment_score: (doc.ai_sentiment_score !== undefined && doc.ai_sentiment_score !== null) ? Number(doc.ai_sentiment_score) : null,
+        
         publish_date: doc.publish_date,
         saved_at: (doc as any).createdAt
     }));

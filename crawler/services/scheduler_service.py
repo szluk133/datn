@@ -8,7 +8,8 @@ import sys
 import uuid 
 
 from database import (
-    get_articles_collection, get_topics_collection, get_qdrant_client, get_meili_client
+    get_articles_collection, get_topics_collection, get_qdrant_client, get_meili_client,
+    get_my_articles_collection
 )
 from services.ai_service import analyze_content_local
 from services.embedding_service import get_embedding_service
@@ -27,6 +28,113 @@ scheduler = AsyncIOScheduler()
 TOPIC_CONCURRENCY_LIMIT = 5 
 topic_semaphore = asyncio.Semaphore(TOPIC_CONCURRENCY_LIMIT)
 
+# [NEW] Hàm xử lý Đồng bộ cho API (được await trực tiếp từ Controller)
+async def process_user_articles_ai(user_id: str, update_id: str) -> int:
+    """
+    Hàm này chạy tuần tự, xử lý xong mới return.
+    Dùng cho API /my-articles/enrich để user chờ kết quả.
+    """
+    my_articles_col = get_my_articles_collection()
+    qdrant = get_qdrant_client()
+    embed_service = get_embedding_service()
+    
+    print(f"[MY_ARTICLES] Bắt đầu xử lý cho User: {user_id}, UpdateID: {update_id}")
+    
+    # 1. Tìm kiếm bài viết theo batch
+    cursor = my_articles_col.find({'user_id': user_id, 'update_id': update_id})
+    articles = await cursor.to_list(length=None)
+    
+    if not articles:
+        print(f"[MY_ARTICLES] Không tìm thấy bài viết nào.")
+        return 0
+
+    processed_count = 0
+    
+    for article in articles:
+        try:
+            content = article.get('content', '')
+            title = article.get('title', '')
+            
+            # 2. Sinh AI Data
+            # Logic: Nếu bài quá ngắn (<50 char) thì bỏ qua AI, gán mặc định
+            if len(content) < 50:
+                 ai_result = {
+                    "summary": [], 
+                    "sentiment_score": 0.0, 
+                    "sentiment_label": "Trung tính"
+                }
+            else:
+                ai_result = await analyze_content_local(content)
+            
+            updates = {
+                'ai_summary': ai_result.get('summary', []),
+                'ai_sentiment_score': ai_result.get('sentiment_score', 0.0),
+                'ai_sentiment_label': ai_result.get('sentiment_label', "Trung tính"),
+                'last_enriched_at': datetime.datetime.now()
+            }
+            
+            # Update MongoDB
+            await my_articles_col.update_one({'_id': article['_id']}, {'$set': updates})
+            article.update(updates) 
+            
+            # 3. Đồng bộ Qdrant (type="my_page")
+            if qdrant:
+                points = []
+                base_payload = {
+                    "type": "my_page",
+                    "article_id": article.get('article_id', str(article['_id'])),
+                    "content": content, 
+                    "title": title,
+                    "website": article.get('website', 'uploaded'),
+                    "publish_date": article.get('publish_date'),
+                    "user_id": user_id,
+                    "update_id": update_id,
+                    "sentiment_label": updates['ai_sentiment_label'],
+                    "sentiment_score": updates['ai_sentiment_score']
+                }
+                
+                # Chuẩn hóa ngày tháng
+                if isinstance(base_payload['publish_date'], datetime.datetime):
+                    base_payload['publish_date'] = base_payload['publish_date'].isoformat()
+                
+                # Chia Chunk
+                chunks = split_text_into_chunks(base_payload['article_id'], content)
+                
+                for chunk in chunks:
+                    vector = await embed_service.get_embedding_async(chunk['text'])
+                    if not vector: continue
+                    
+                    qdrant_point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{base_payload['article_id']}_{chunk['chunk_id']}"))
+                    chunk_payload = base_payload.copy()
+                    chunk_payload['text'] = chunk['text'] 
+                    
+                    points.append(PointStruct(id=qdrant_point_id, vector=vector, payload=chunk_payload))
+                
+                # Vector Summary
+                ai_summary_list = updates.get('ai_summary', [])
+                if ai_summary_list:
+                    summary_text = "\n".join(ai_summary_list)
+                    sum_vector = await embed_service.get_embedding_async(summary_text)
+                    if sum_vector:
+                        sum_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{base_payload['article_id']}_summary"))
+                        sum_payload = base_payload.copy()
+                        sum_payload['is_summary'] = True
+                        sum_payload['text'] = summary_text
+                        points.append(PointStruct(id=sum_id, vector=sum_vector, payload=sum_payload))
+
+                if points:
+                    if hasattr(qdrant, 'upsert'):
+                        await qdrant.upsert(collection_name=QDRANT_COLLECTION, points=points)
+            
+            processed_count += 1
+            
+        except Exception as e:
+            print(f"[MY_ARTICLES ERROR] ID {article.get('_id')}: {e}")
+
+    print(f"[MY_ARTICLES] Hoàn tất. Đã xử lý {processed_count}/{len(articles)} bài.")
+    return processed_count
+
+# [BACKGROUND] Worker chạy ngầm định kỳ cho bài Crawl (Giữ nguyên)
 async def enrichment_worker():
     articles_col = get_articles_collection()
     qdrant = get_qdrant_client()
@@ -59,6 +167,7 @@ async def enrichment_worker():
                     'last_enriched_at': datetime.datetime.now(),
                     'ai_summary': [],
                     'ai_sentiment_score': 0.0,
+                    'ai_sentiment_label': "Trung tính",
                     'status': 'enriched'
                 }
             else:
@@ -70,12 +179,12 @@ async def enrichment_worker():
                     'last_enriched_at': datetime.datetime.now(),
                     'ai_summary': final_summary,
                     'ai_sentiment_score': ai_result.get('sentiment_score', 0.0),
+                    'ai_sentiment_label': ai_result.get('sentiment_label', "Trung tính"),
                     'status': 'enriched'
                 }
             
             await articles_col.update_one({'_id': article['_id']}, {'$set': updates})
             
-            # Đồng bộ sang Meilisearch
             if meili:
                 try:
                     article.update(updates)
@@ -83,12 +192,10 @@ async def enrichment_worker():
                     if not s_id_val: s_id_val = ['system_auto']
                     elif isinstance(s_id_val, str): s_id_val = [s_id_val]
                     article['search_id'] = s_id_val
-                    
                     await sync_to_meilisearch([article])
                 except Exception as e:
                     print(f"[MEILI ERROR] Sync failed: {e}")
 
-            # Đồng bộ sang Qdrant
             if qdrant and updates['status'] == 'enriched':
                 points = []
                 content_text = article.get('content', '') or article.get('summary', '')
@@ -97,26 +204,30 @@ async def enrichment_worker():
                 if not s_id_val: s_id_val = ['system_auto']
                 elif isinstance(s_id_val, str): s_id_val = [s_id_val]
 
+                base_payload = {
+                    "article_id": article.get('article_id'),
+                    "user_id": article.get('user_id', 'system'),
+                    "search_id": s_id_val, 
+                    "title": article.get('title', ''),
+                    "url": article.get('url', ''),
+                    "website": article.get('website'),
+                    "publish_date": article.get('publish_date').isoformat() if article.get('publish_date') else None,
+                    "sentiment": updates.get('ai_sentiment_score', 0.0),
+                    "sentiment_label": updates.get('ai_sentiment_label', "Trung tính"),
+                    "topic": article.get('site_categories', []) 
+                }
+
                 chunks = split_text_into_chunks(article.get('article_id'), content_text)
                 for chunk in chunks:
                     vector = await embed_service.get_embedding_async(chunk['text'])
                     if not vector: continue
-                    
                     qdrant_chunk_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, chunk['chunk_id']))
-                    chunk_payload = {
+                    chunk_payload = base_payload.copy()
+                    chunk_payload.update({
                         "type": "chunk",
-                        "article_id": article.get('article_id'),
                         "chunk_id": chunk['chunk_id'],
-                        "text": chunk['text'], 
-                        "user_id": article.get('user_id', 'system'),
-                        "search_id": s_id_val, 
-                        "title": article.get('title', ''),
-                        "url": article.get('url', ''),
-                        "website": article.get('website'),
-                        "publish_date": article.get('publish_date').isoformat() if article.get('publish_date') else None,
-                        "sentiment": updates.get('ai_sentiment_score', 0.0),
-                        "topic": article.get('site_categories', []) 
-                    }
+                        "text": chunk['text']
+                    })
                     points.append(PointStruct(id=qdrant_chunk_id, vector=vector, payload=chunk_payload))
                 
                 ai_summary_list = updates.get('ai_summary', [])
@@ -125,23 +236,14 @@ async def enrichment_worker():
                     summary_vector = await embed_service.get_embedding_async(summary_text_joined)
                     if summary_vector:
                         summary_point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{article.get('article_id')}_summary"))
-                        summary_payload = {
+                        summary_payload = base_payload.copy()
+                        summary_payload.update({
                             "type": "ai_summary",
-                            "article_id": article.get('article_id'),
-                            "summary_text": ai_summary_list,
-                            "title": article.get('title', ''),
-                            "url": article.get('url', ''),
-                            "website": article.get('website'),
-                            "publish_date": article.get('publish_date').isoformat() if article.get('publish_date') else None,
-                            "topic": article.get('site_categories', []),
-                            "sentiment": updates.get('ai_sentiment_score', 0.0),
-                            "search_id": s_id_val,
-                            "user_id": article.get('user_id', 'system')
-                        }
+                            "summary_text": ai_summary_list
+                        })
                         points.append(PointStruct(id=summary_point_id, vector=summary_vector, payload=summary_payload))
 
                 if points:
-
                     if hasattr(qdrant, 'upsert'):
                         await qdrant.upsert(collection_name=QDRANT_COLLECTION, points=points)
                     
@@ -151,6 +253,7 @@ async def enrichment_worker():
             
     print(f"[WORKER] Hoàn tất batch {len(articles)} bài.")
 
+# [BACKGROUND] Auto Crawl Logic (Giữ nguyên)
 async def process_single_topic(topic, crawler, articles_col, topics_col, cutoff_date):
     async with topic_semaphore: 
         site = topic['website']
@@ -173,26 +276,17 @@ async def process_single_topic(topic, crawler, articles_col, topics_col, cutoff_
                 tasks = []
                 for link in links:
                     url_check = link['url']
-                    
-                    # [LOGIC DỪNG - CHỈ DỪNG NẾU ĐÃ CÓ TRONG SYSTEM_AUTO]
                     if link.get('publish_date') and link['publish_date'] < cutoff_date:
                         existing_doc = await articles_col.find_one({'url': url_check}, {'search_id': 1})
-                        
                         if existing_doc and 'system_auto' in existing_doc.get('search_id', []):
                             print(f"[AUTO] Bài cũ ({link['publish_date']}) ĐÃ CÓ 'system_auto'. Dừng topic {topic['name']}.")
                             stop_topic = True
                             break
-                        else:
-                            # Nếu bài cũ nhưng chưa có tag system_auto (hoặc chưa crawl), vẫn tiếp tục crawl để bổ sung
-                            # print(f"[AUTO] Bài cũ ({link['publish_date']}) nhưng chưa có 'system_auto'. Tiếp tục...")
-                            pass
+                        else: pass
 
-                    # [LOGIC SKIP - CHỈ SKIP NẾU ĐÃ CÓ SYSTEM_AUTO]
                     existing_full = await articles_col.find_one({'url': url_check}, {'search_id': 1})
                     if existing_full:
-                        if 'system_auto' in existing_full.get('search_id', []):
-                            continue # Đã có và đã được auto crawl -> Bỏ qua
-                        # Nếu có nhưng là manual crawl (không có system_auto) -> Vẫn thêm vào tasks để update search_id
+                        if 'system_auto' in existing_full.get('search_id', []): continue 
                     
                     tasks.append(crawl_and_process_article(crawler, link, None, site, [], "system_auto", "system"))
                 
@@ -203,28 +297,19 @@ async def process_single_topic(topic, crawler, articles_col, topics_col, cutoff_
                         ops = []
                         for d in valid_res:
                             if 'current_search_id' in d: del d['current_search_id']
-                            ops.append(UpdateOne(
-                                {'url': d['url']}, 
-                                {'$set': d, '$addToSet': {'search_id': "system_auto"}}, 
-                                upsert=True
-                            ))
-                        
+                            ops.append(UpdateOne({'url': d['url']}, {'$set': d, '$addToSet': {'search_id': "system_auto"}}, upsert=True))
                         await articles_col.bulk_write(ops, ordered=False)
-                        
                         for d in valid_res: d['search_id'] = ["system_auto"] 
                         await sync_to_meilisearch(valid_res)
-                        
                         new_count += len(valid_res)
                 
                 page += 1
                 await asyncio.sleep(1)
-            except Exception as e:
-                print(f"[AUTO ERR] {topic['name']}: {e}"); break
+            except Exception as e: print(f"[AUTO ERR] {topic['name']}: {e}"); break
         
         await topics_col.update_one({'_id': topic['_id']}, {'$set': {'last_crawled_at': datetime.datetime.now()}})
         if new_count > 0: print(f"[AUTO] << Xong {topic['name']}: +{new_count} bài mới.")
 
-# [UPDATE] Thêm tham số force_days_back
 async def execute_topic_crawl(website_filter: Optional[str] = None, force_days_back: int = None):
     filter_log = f"Filter: {website_filter}" if website_filter else "Filter: ALL"
     force_log = f"| FORCE DAYS: {force_days_back}" if force_days_back else ""
@@ -254,21 +339,13 @@ async def execute_topic_crawl(website_filter: Optional[str] = None, force_days_b
             site = topic['website']; crawler = crawler_instances.get(site)
             if crawler:
                 last_crawled = topic.get('last_crawled_at')
-                
                 if force_days_back:
-                    # [TEST MODE] Ép buộc crawl lại số ngày quy định (VD: 60 ngày)
                     topic_cutoff = now - datetime.timedelta(days=force_days_back)
-                    # print(f"[AUTO LOGIC] {topic['name']}: Force crawl back {force_days_back} days.")
                 elif last_crawled:
                     time_diff = now - last_crawled
-                    if time_diff.days > 60:
-                        topic_cutoff = now - datetime.timedelta(days=60)
-                        print(f"[AUTO LOGIC] {topic['name']}: Gap > 60 days. Reset cutoff to 60 days back.")
-                    else:
-                        topic_cutoff = last_crawled - datetime.timedelta(days=1)
-                else:
-                    topic_cutoff = now - datetime.timedelta(days=60)
-                    print(f"[AUTO LOGIC] {topic['name']}: New topic. Cutoff set to 60 days back.")
+                    if time_diff.days > 60: topic_cutoff = now - datetime.timedelta(days=60)
+                    else: topic_cutoff = last_crawled - datetime.timedelta(days=1)
+                else: topic_cutoff = now - datetime.timedelta(days=60)
 
                 tasks.append(process_single_topic(topic, crawler, articles_col, topics_col, topic_cutoff))
         if tasks: await asyncio.gather(*tasks)
@@ -290,10 +367,8 @@ def start_scheduler():
     threading.Thread(target=local_ai_service.load_model).start()
     
     scheduler.add_job(enrichment_worker, IntervalTrigger(seconds=30), id='enrichment', replace_existing=True, max_instances=2)
-    
     scheduler.add_job(execute_topic_crawl, IntervalTrigger(hours=2), id='topic_crawl', replace_existing=True)
     scheduler.start()
-
 
 
 
@@ -319,6 +394,7 @@ def start_scheduler():
 
 # from crawlers.vnexpress_crawler import VnExpressCrawler
 # from crawlers.vneconomy_crawler import VneconomyCrawler
+# from crawlers.cafef_crawler import CafeFCrawler
 # from qdrant_client.models import PointStruct 
 
 # scheduler = AsyncIOScheduler()
@@ -353,14 +429,17 @@ def start_scheduler():
 #             if not content_for_analysis:
 #                 content_for_analysis = article.get('summary', '')
 
+#             # Xử lý trường hợp bài quá ngắn
 #             if len(content_for_analysis) < 50:
 #                 updates = {
 #                     'last_enriched_at': datetime.datetime.now(),
 #                     'ai_summary': [],
 #                     'ai_sentiment_score': 0.0,
+#                     'ai_sentiment_label': "Trung tính",
 #                     'status': 'enriched'
 #                 }
 #             else:
+#                 # Gọi AI Service mới
 #                 ai_result = await analyze_content_local(content_for_analysis)
 #                 raw_summary = ai_result.get('summary', [])
 #                 final_summary = raw_summary[:3] if raw_summary else []
@@ -369,12 +448,14 @@ def start_scheduler():
 #                     'last_enriched_at': datetime.datetime.now(),
 #                     'ai_summary': final_summary,
 #                     'ai_sentiment_score': ai_result.get('sentiment_score', 0.0),
+#                     'ai_sentiment_label': ai_result.get('sentiment_label', "Trung tính"),
 #                     'status': 'enriched'
 #                 }
             
+#             # Update MongoDB
 #             await articles_col.update_one({'_id': article['_id']}, {'$set': updates})
             
-#             # Đồng bộ sang Meilisearch
+#             # --- Đồng bộ Meilisearch ---
 #             if meili:
 #                 try:
 #                     article.update(updates)
@@ -387,7 +468,7 @@ def start_scheduler():
 #                 except Exception as e:
 #                     print(f"[MEILI ERROR] Sync failed: {e}")
 
-#             # Đồng bộ sang Qdrant
+#             # --- Đồng bộ Qdrant ---
 #             if qdrant and updates['status'] == 'enriched':
 #                 points = []
 #                 content_text = article.get('content', '') or article.get('summary', '')
@@ -396,51 +477,50 @@ def start_scheduler():
 #                 if not s_id_val: s_id_val = ['system_auto']
 #                 elif isinstance(s_id_val, str): s_id_val = [s_id_val]
 
+#                 # Payload chung cho Qdrant
+#                 base_payload = {
+#                     "article_id": article.get('article_id'),
+#                     "user_id": article.get('user_id', 'system'),
+#                     "search_id": s_id_val, 
+#                     "title": article.get('title', ''),
+#                     "url": article.get('url', ''),
+#                     "website": article.get('website'),
+#                     "publish_date": article.get('publish_date').isoformat() if article.get('publish_date') else None,
+#                     "sentiment": updates.get('ai_sentiment_score', 0.0), # Score [0,1]
+#                     "sentiment_label": updates.get('ai_sentiment_label', "Trung tính"), # NEW FIELD
+#                     "topic": article.get('site_categories', []) 
+#                 }
+
+#                 # 1. Chunk Embeddings
 #                 chunks = split_text_into_chunks(article.get('article_id'), content_text)
 #                 for chunk in chunks:
 #                     vector = await embed_service.get_embedding_async(chunk['text'])
 #                     if not vector: continue
                     
 #                     qdrant_chunk_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, chunk['chunk_id']))
-#                     chunk_payload = {
+#                     chunk_payload = base_payload.copy()
+#                     chunk_payload.update({
 #                         "type": "chunk",
-#                         "article_id": article.get('article_id'),
 #                         "chunk_id": chunk['chunk_id'],
-#                         "text": chunk['text'], 
-#                         "user_id": article.get('user_id', 'system'),
-#                         "search_id": s_id_val, 
-#                         "title": article.get('title', ''),
-#                         "url": article.get('url', ''),
-#                         "website": article.get('website'),
-#                         "publish_date": article.get('publish_date').isoformat() if article.get('publish_date') else None,
-#                         "sentiment": updates.get('ai_sentiment_score', 0.0),
-#                         "topic": article.get('site_categories', []) 
-#                     }
+#                         "text": chunk['text']
+#                     })
 #                     points.append(PointStruct(id=qdrant_chunk_id, vector=vector, payload=chunk_payload))
                 
+#                 # 2. Summary Embeddings
 #                 ai_summary_list = updates.get('ai_summary', [])
 #                 if ai_summary_list:
 #                     summary_text_joined = "\n".join(ai_summary_list)
 #                     summary_vector = await embed_service.get_embedding_async(summary_text_joined)
 #                     if summary_vector:
 #                         summary_point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, f"{article.get('article_id')}_summary"))
-#                         summary_payload = {
+#                         summary_payload = base_payload.copy()
+#                         summary_payload.update({
 #                             "type": "ai_summary",
-#                             "article_id": article.get('article_id'),
-#                             "summary_text": ai_summary_list,
-#                             "title": article.get('title', ''),
-#                             "url": article.get('url', ''),
-#                             "website": article.get('website'),
-#                             "publish_date": article.get('publish_date').isoformat() if article.get('publish_date') else None,
-#                             "topic": article.get('site_categories', []),
-#                             "sentiment": updates.get('ai_sentiment_score', 0.0),
-#                             "search_id": s_id_val,
-#                             "user_id": article.get('user_id', 'system')
-#                         }
+#                             "summary_text": ai_summary_list
+#                         })
 #                         points.append(PointStruct(id=summary_point_id, vector=summary_vector, payload=summary_payload))
 
 #                 if points:
-
 #                     if hasattr(qdrant, 'upsert'):
 #                         await qdrant.upsert(collection_name=QDRANT_COLLECTION, points=points)
                     
@@ -471,14 +551,21 @@ def start_scheduler():
                 
 #                 tasks = []
 #                 for link in links:
-#                     if link.get('publish_date'):
-#                         if link['publish_date'] < cutoff_date:
-#                             print(f"[AUTO] Gặp bài cũ ({link['publish_date']}), dừng topic {topic['name']}.")
-#                             stop_topic = True
-#                             break 
+#                     url_check = link['url']
                     
-#                     if await articles_col.find_one({'url': link['url']}, {'_id': 1}): 
-#                         continue
+#                     if link.get('publish_date') and link['publish_date'] < cutoff_date:
+#                         existing_doc = await articles_col.find_one({'url': url_check}, {'search_id': 1})
+#                         if existing_doc and 'system_auto' in existing_doc.get('search_id', []):
+#                             print(f"[AUTO] Bài cũ ({link['publish_date']}) ĐÃ CÓ 'system_auto'. Dừng topic {topic['name']}.")
+#                             stop_topic = True
+#                             break
+#                         else:
+#                             pass
+
+#                     existing_full = await articles_col.find_one({'url': url_check}, {'search_id': 1})
+#                     if existing_full:
+#                         if 'system_auto' in existing_full.get('search_id', []):
+#                             continue 
                     
 #                     tasks.append(crawl_and_process_article(crawler, link, None, site, [], "system_auto", "system"))
                 
@@ -510,9 +597,11 @@ def start_scheduler():
 #         await topics_col.update_one({'_id': topic['_id']}, {'$set': {'last_crawled_at': datetime.datetime.now()}})
 #         if new_count > 0: print(f"[AUTO] << Xong {topic['name']}: +{new_count} bài mới.")
 
-# async def execute_topic_crawl(website_filter: Optional[str] = None):
+# async def execute_topic_crawl(website_filter: Optional[str] = None, force_days_back: int = None):
 #     filter_log = f"Filter: {website_filter}" if website_filter else "Filter: ALL"
-#     print(f"--- [AUTO CRAWL] START ({filter_log}) ---")
+#     force_log = f"| FORCE DAYS: {force_days_back}" if force_days_back else ""
+#     print(f"--- [AUTO CRAWL] START ({filter_log}) {force_log} ---")
+    
 #     topics_col = get_topics_collection(); articles_col = get_articles_collection()
 #     query = {'is_active': True}
 #     if website_filter: query['website'] = website_filter
@@ -528,12 +617,26 @@ def start_scheduler():
 #         crawler_instances = {}
 #         if website_filter == 'vneconomy.vn' or website_filter is None: crawler_instances['vneconomy.vn'] = VneconomyCrawler(client)
 #         if website_filter == 'vnexpress.net' or website_filter is None: crawler_instances['vnexpress.net'] = VnExpressCrawler(client)
+#         if website_filter == 'cafef.vn' or website_filter is None: crawler_instances['cafef.vn'] = CafeFCrawler(client)
+        
 #         tasks = []
+#         now = datetime.datetime.now()
+        
 #         for topic in topics:
 #             site = topic['website']; crawler = crawler_instances.get(site)
 #             if crawler:
-#                 if topic.get('last_crawled_at'): topic_cutoff = topic['last_crawled_at'] - datetime.timedelta(minutes=30)
-#                 else: topic_cutoff = datetime.datetime.now() - datetime.timedelta(days=3)
+#                 last_crawled = topic.get('last_crawled_at')
+#                 if force_days_back:
+#                     topic_cutoff = now - datetime.timedelta(days=force_days_back)
+#                 elif last_crawled:
+#                     time_diff = now - last_crawled
+#                     if time_diff.days > 60:
+#                         topic_cutoff = now - datetime.timedelta(days=60)
+#                     else:
+#                         topic_cutoff = last_crawled - datetime.timedelta(days=1)
+#                 else:
+#                     topic_cutoff = now - datetime.timedelta(days=60)
+
 #                 tasks.append(process_single_topic(topic, crawler, articles_col, topics_col, topic_cutoff))
 #         if tasks: await asyncio.gather(*tasks)
 #     print(f"--- [AUTO CRAWL] END ---")
@@ -553,7 +656,6 @@ def start_scheduler():
 #     import threading
 #     threading.Thread(target=local_ai_service.load_model).start()
     
-#     scheduler.add_job(enrichment_worker, IntervalTrigger(seconds=15), id='enrichment', replace_existing=True, max_instances=2)
-    
+#     scheduler.add_job(enrichment_worker, IntervalTrigger(seconds=30), id='enrichment', replace_existing=True, max_instances=2)
 #     scheduler.add_job(execute_topic_crawl, IntervalTrigger(hours=2), id='topic_crawl', replace_existing=True)
 #     scheduler.start()

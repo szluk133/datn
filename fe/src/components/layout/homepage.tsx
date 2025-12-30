@@ -169,10 +169,10 @@ const HomePage = () => {
                 <div style={{ padding: '60px 50px', background: '#001529', color: '#fff' }}>
                     <Row gutter={[32, 32]} justify="center">
                         <Col xs={12} md={6} style={{ textAlign: 'center' }}>
-                            <Statistic title={<span style={{ color: '#bae7ff' }}>Bài viết đã Crawl</span>} value={15890} styles={{ content: { color: '#fff', fontSize: 36 },}} />
+                            <Statistic title={<span style={{ color: '#bae7ff' }}>Bài viết đã Crawl</span>} value={12000} styles={{ content: { color: '#fff', fontSize: 36 },}} />
                         </Col>
                         <Col xs={12} md={6} style={{ textAlign: 'center' }}>
-                            <Statistic title={<span style={{ color: '#bae7ff' }}>Nguồn báo</span>} value={2} styles={{ content: { color: '#fff', fontSize: 36 },}} suffix="Websites" />
+                            <Statistic title={<span style={{ color: '#bae7ff' }}>Nguồn báo</span>} value={3} styles={{ content: { color: '#fff', fontSize: 36 },}} suffix="Websites" />
                         </Col>
                         <Col xs={12} md={6} style={{ textAlign: 'center' }}>
                             <Statistic title={<span style={{ color: '#bae7ff' }}>Người dùng</span>} value={250} styles={{ content: { color: '#fff', fontSize: 36 },}} prefix={<UserAddOutlined />} />

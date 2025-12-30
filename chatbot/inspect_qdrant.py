@@ -34,9 +34,15 @@ def inspect_data():
             
             # Kiểm tra các trường quan trọng
             print(f"  - type: {payload.get('type')}")
-            print(f"  - topic: {payload.get('topic')} (type: {type(payload.get('topic'))})")
+            print(f"  - topic: {payload.get('topic')}")
             print(f"  - article_id: {payload.get('article_id')}")
-            print(f"  - Full Payload Keys: {list(payload.keys())}")
+            print(f"  - search_id: {payload.get('search_id')}")
+            
+            # [NEW] Kiểm tra các trường mới
+            print(f"  - update_id (New): {payload.get('update_id')}")
+            print(f"  - ai_sentiment_label (New): {payload.get('ai_sentiment_label')}")
+            print(f"  - ai_sentiment_score (New): {payload.get('ai_sentiment_score')}")
+            print(f"  - sentiment (Legacy): {payload.get('sentiment')}")
             
     except Exception as e:
         logger.error(f"Error inspecting Qdrant: {e}")

@@ -38,6 +38,7 @@ const DashboardSources = () => {
         Positive: item.breakdown.positive,
         Negative: item.breakdown.negative,
         Neutral: item.breakdown.neutral,
+        confidence: (item.avgConfidence * 100).toFixed(1) + '%' 
     }));
 
     return (
@@ -48,7 +49,15 @@ const DashboardSources = () => {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="source" />
                         <YAxis />
-                        <Tooltip />
+                        <Tooltip 
+                            labelFormatter={(label, payload) => {
+                                if (payload && payload.length > 0) {
+                                    const conf = payload[0].payload.confidence;
+                                    return `${label} (Tin cậy: ${conf})`;
+                                }
+                                return label;
+                            }}
+                        />
                         <Legend />
                         <Bar dataKey="Positive" stackId="a" fill="#52c41a" name="Tích cực" />
                         <Bar dataKey="Neutral" stackId="a" fill="#faad14" name="Trung tính" />

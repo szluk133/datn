@@ -268,10 +268,19 @@ const ArticleResultList = (props: IProps) => {
         };
     }, [localStats]);
 
+    // Updated page sentiment to check labels
     const pageSentiment = useMemo(() => {
-        const positive = localArticles.filter(a => Number(a.ai_sentiment_score || 0) > 0).length;
-        const negative = localArticles.filter(a => Number(a.ai_sentiment_score || 0) < 0).length;
-        const neutral = localArticles.length - positive - negative;
+        let positive = 0;
+        let negative = 0;
+        let neutral = 0;
+
+        localArticles.forEach(a => {
+            const label = (a.ai_sentiment_label || '').toLowerCase();
+            if (['tích cực', 'positive'].includes(label)) positive++;
+            else if (['tiêu cực', 'negative'].includes(label)) negative++;
+            else neutral++; // Count neutral or undefined as neutral for charts
+        });
+
         return { positive, negative, neutral };
     }, [localArticles]);
 
@@ -280,6 +289,7 @@ const ArticleResultList = (props: IProps) => {
         return Array.from(sources);
     }, [localArticles]);
 
+    // Sorting logic updated for Label prioritization
     const displayedArticles = useMemo(() => {
         const sorted = [...localArticles];
         sorted.sort((a, b) => {
@@ -288,8 +298,19 @@ const ArticleResultList = (props: IProps) => {
                 const dateB = new Date(b.publish_date).getTime();
                 return sortConfig.sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
             } else if (sortConfig.sortBy === 'sentiment') {
-                const scoreA = a.ai_sentiment_score ?? 0;
-                const scoreB = b.ai_sentiment_score ?? 0;
+                // Map Label to numerical value for sorting: Positive (1), Neutral (0), Negative (-1)
+                // Multiply by confidence score to break ties or weight them
+                const getScore = (article: IArticle) => {
+                    const label = (article.ai_sentiment_label || '').toLowerCase();
+                    const confidence = article.ai_sentiment_score || 0;
+                    
+                    if (['tích cực', 'positive'].includes(label)) return 1 + confidence; // > 1
+                    if (['tiêu cực', 'negative'].includes(label)) return -1 - confidence; // < -1
+                    return 0; // Neutral around 0
+                };
+
+                const scoreA = getScore(a);
+                const scoreB = getScore(b);
                 return sortConfig.sortOrder === 'asc' ? scoreA - scoreB : scoreB - scoreA;
             }
             return 0;

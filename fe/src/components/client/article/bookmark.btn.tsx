@@ -14,6 +14,7 @@ interface IBookmarkProps {
     siteCategories?: string[];
     summary?: string;
     aiSentimentScore?: number;
+    aiSentimentLabel?: string; // Thêm prop này
     publishDate?: string;
     size?: 'small' | 'middle' | 'large';
     shape?: 'circle' | 'default' | 'round';
@@ -23,7 +24,7 @@ interface IBookmarkProps {
 const BookmarkButton = (props: IBookmarkProps) => {
     const { 
         articleId, articleTitle, articleUrl, 
-        website, siteCategories, summary, aiSentimentScore, publishDate,
+        website, siteCategories, summary, aiSentimentScore, aiSentimentLabel, publishDate,
         size = 'middle', shape, type = 'text' 
     } = props;
     
@@ -91,6 +92,7 @@ const BookmarkButton = (props: IBookmarkProps) => {
                     site_categories: siteCategories || [],
                     summary: summary || "",
                     ai_sentiment_score: aiSentimentScore || 0,
+                    ai_sentiment_label: aiSentimentLabel || "", // Thêm trường này vào payload
                     publish_date: publishDate || new Date().toISOString()
                 };
 

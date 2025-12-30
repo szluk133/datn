@@ -9,7 +9,8 @@ import {
     SmileFilled, 
     MehFilled, 
     FrownFilled,
-    ArrowRightOutlined
+    ArrowRightOutlined,
+    SafetyCertificateOutlined
 } from '@ant-design/icons';
 import Link from 'next/link';
 import { IArticle } from '@/types/next-auth';
@@ -27,24 +28,38 @@ interface ArticleItemProps {
 const ArticleItem = ({ article, isSelected = false, onToggleSelect }: ArticleItemProps) => {
     const { token } = theme.useToken();
     
-    const getSentimentInfo = (score: number | null | undefined) => {
-        if (score === undefined || score === null || isNaN(score)) {
-            return { color: token.colorTextDescription, icon: <MehFilled />, label: 'Chưa phân tích', bg: '#f5f5f5' };
+    // Hàm xử lý hiển thị dựa trên Label thay vì Score
+    const getSentimentInfo = (label: string | undefined, confidence: number | null | undefined) => {
+        const safeLabel = label ? label.toLowerCase().trim() : '';
+
+        // Mapping các trường hợp nhãn
+        if (['tích cực', 'positive'].includes(safeLabel)) {
+            return { color: token.colorSuccess, icon: <SmileFilled />, label: 'Tích cực', bg: '#f6ffed' };
         }
-        
-        if (score >= 0.5) return { color: token.colorSuccess, icon: <SmileFilled />, label: 'Tích cực', bg: '#f6ffed' };
-        if (score > 0) return { color: '#13c2c2', icon: <SmileFilled />, label: 'Khá tốt', bg: '#e6fffb' };
-        if (score === 0) return { color: token.colorWarning, icon: <MehFilled />, label: 'Trung tính', bg: '#fffbe6' };
-        if (score > -0.5) return { color: token.colorError, icon: <FrownFilled />, label: 'Tiêu cực', bg: '#fff2f0' };
-        return { color: '#cf1322', icon: <FrownFilled />, label: 'Rất tiêu cực', bg: '#fff1f0' };
+        if (['tiêu cực', 'negative'].includes(safeLabel)) {
+            return { color: token.colorError, icon: <FrownFilled />, label: 'Tiêu cực', bg: '#fff2f0' };
+        }
+        if (['trung tính', 'neutral'].includes(safeLabel)) {
+            return { color: token.colorWarning, icon: <MehFilled />, label: 'Trung tính', bg: '#fffbe6' };
+        }
+
+        // Fallback khi không có nhãn hoặc nhãn lạ
+        return { color: token.colorTextDescription, icon: <MehFilled />, label: 'Chưa phân tích', bg: '#f5f5f5' };
     };
 
     const sentimentScore = (article.ai_sentiment_score !== undefined && article.ai_sentiment_score !== null) 
         ? Number(article.ai_sentiment_score) 
         : undefined;
+    
+    const sentimentLabel = article.ai_sentiment_label;
 
-    const sentiment = getSentimentInfo(sentimentScore);
+    const sentiment = getSentimentInfo(sentimentLabel, sentimentScore);
     const articleId = article.id || article._id;
+
+    // Format hiển thị độ tin cậy (VD: 0.95 -> 95%)
+    const confidenceDisplay = sentimentScore !== undefined 
+        ? `${(sentimentScore * 100).toFixed(0)}%` 
+        : 'N/A';
 
     return (
         <Card
@@ -102,7 +117,12 @@ const ArticleItem = ({ article, isSelected = false, onToggleSelect }: ArticleIte
                             </Text>
                         </Space>
                         
-                        <Tooltip title={`Điểm cảm xúc AI: ${sentimentScore ?? 'N/A'}`}>
+                        <Tooltip title={
+                            <Space orientation="vertical" size={0}>
+                                <span>Kết quả AI phân tích: {sentiment.label}</span>
+                                <span><SafetyCertificateOutlined /> Độ tin cậy: {confidenceDisplay}</span>
+                            </Space>
+                        }>
                             <Tag 
                                 variant="filled"
                                 style={{ 
@@ -187,6 +207,7 @@ const ArticleItem = ({ article, isSelected = false, onToggleSelect }: ArticleIte
                                     siteCategories={article.site_categories}
                                     summary={article.summary}
                                     aiSentimentScore={article.ai_sentiment_score}
+                                    aiSentimentLabel={article.ai_sentiment_label}
                                     publishDate={article.publish_date}
                                     size="middle"
                                     shape="circle"

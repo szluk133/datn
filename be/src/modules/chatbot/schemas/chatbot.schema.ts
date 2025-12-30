@@ -18,7 +18,7 @@ export const ConversationSchema = SchemaFactory.createForClass(Conversation);
 @Schema({ _id: false })
 export class Source {
     @Prop()
-    article_id: string;
+    _id: string;
 
     @Prop()
     title: string;
@@ -38,6 +38,9 @@ export class Context {
 
     @Prop()
     article_id?: string;
+
+    @Prop()
+    update_id?: string;
 
     @Prop()
     sort_by?: string;
@@ -74,6 +77,9 @@ export class Message {
 
     @Prop()
     strategy_used?: string;
+
+    @Prop()
+    dependency_label?: string;
 
     createdAt?: Date;
 }
