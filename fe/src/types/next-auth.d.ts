@@ -40,8 +40,10 @@ export interface IUser {
     name: string;
     email: string;
     role: string;
+    phone?: string;
+    address?: string;
+    image?: string;
 }
-
 // CHATBOT
 export interface SourceDto {
     _id: string;

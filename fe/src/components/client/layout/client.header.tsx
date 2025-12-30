@@ -88,6 +88,12 @@ const ClientHeader: React.FC = () => {
             case 'my-article':
                 router.push('/model/my-article');
                 break;
+            case 'profile':
+                router.push('/model/profile');
+                break;
+            case 'logout':
+                handleLogout();
+                break;
             default:
                 break;
         }
@@ -98,7 +104,8 @@ const ClientHeader: React.FC = () => {
             key: 'profile',
             icon: <UserOutlined />,
             label: <Text strong>Hồ sơ cá nhân</Text>,
-            style: { padding: '10px 16px' }
+            style: { padding: '10px 16px' },
+            onClick: () => router.push('/model/profile')
         },
         {
             type: 'divider',
@@ -229,11 +236,13 @@ const ClientHeader: React.FC = () => {
                         >
                             <Flex vertical gap={0} style={{ lineHeight: 1.2, textAlign: 'right', minWidth: 80 }}>
                                 <Text strong style={{ fontSize: 14, color: token.colorTextHeading }} ellipsis>
-                                    {session.user?.name ?? "User"}
+                                    {session.user?.name || session.user?.email}
                                 </Text>
-                                <Text type="secondary" style={{ fontSize: 11 }} ellipsis>
-                                    {session.user?.email}
-                                </Text>
+                                {session.user?.name && (
+                                    <Text type="secondary" style={{ fontSize: 11 }} ellipsis>
+                                        {session.user?.email}
+                                    </Text>
+                                )}
                             </Flex>
                             <Avatar 
                                 style={{ 
@@ -274,30 +283,24 @@ const ClientHeader: React.FC = () => {
             </div>
 
             <style jsx global>{`
-                /* Menu Item Style Upgrade */
                 .custom-header-menu .ant-menu-item {
                     transition: all 0.3s !important;
                     margin: 0 6px !important;
-                    border-radius: 50px !important; /* Pill shape */
-                    color: ${token.colorText} !important; /* Màu chữ đậm hơn một chút để nổi trên nền xanh */
+                    border-radius: 50px !important; 
+                    color: ${token.colorText} !important;
                 }
-                
                 .custom-header-menu .ant-menu-item:hover {
                     color: ${token.colorPrimary} !important;
-                    background: rgba(255,255,255,0.5) !important; /* Hover nền trắng mờ */
+                    background: rgba(255,255,255,0.5) !important; 
                 }
-
-                /* Active State Highlighting */
                 .custom-header-menu .ant-menu-item-selected {
                     color: #fff !important;
                     background: ${token.colorPrimary} !important; 
                     box-shadow: 0 4px 12px ${token.colorPrimary}50 !important;
                 }
-                
                 .custom-header-menu .ant-menu-item::after {
                     display: none !important; 
                 }
-
                 .user-dropdown-trigger:hover {
                     background: #fff !important;
                     box-shadow: 0 6px 16px rgba(0,0,0,0.1) !important;

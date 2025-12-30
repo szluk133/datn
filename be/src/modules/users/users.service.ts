@@ -11,6 +11,9 @@ import { ChangePasswordAuthDto, CodeAuthDto, CreateAuthDto } from '@/auth/dto/cr
 import { v4 as uuidv4 } from 'uuid';
 import dayjs from 'dayjs';
 import { MailerService } from '@nestjs-modules/mailer';
+import { ChangePasswordUserDto } from './dto/change-password-user.dto';
+import { compareSync } from 'bcrypt';
+import { UpdateProfileDto } from './dto/update-profile.dto';
 
 @Injectable()
 export class UsersService {
@@ -69,12 +72,12 @@ export class UsersService {
 
     return {
       meta: {
-        current: current, //trang hiện tại
-        pageSize: pageSize, //số lượng bản ghi đã lấy
-        pages: totalPages,  //tổng số trang với điều kiện query
-        total: totalItems // tổng số phần tử (số bản ghi)
+        current: current,
+        pageSize: pageSize,
+        pages: totalPages,
+        total: totalItems
       },
-      results //kết quả query
+      results
     }
   }
 
@@ -252,6 +255,38 @@ export class UsersService {
       throw new BadRequestException("Mã code không hợp lệ hoặc đã hết hạn")
     }
 
+  }
+
+  async changeUserPassword(data: ChangePasswordUserDto, user: any) {
+    const { currentPassword, newPassword, confirmPassword } = data;
+
+    if (newPassword !== confirmPassword) {
+      throw new BadRequestException("Mật khẩu mới và xác nhận mật khẩu không khớp");
+    }
+
+    const foundUser = await this.userModel.findOne({ _id: user._id });
+    if (!foundUser) {
+      throw new BadRequestException("Người dùng không tồn tại");
+    }
+
+    const isValid = compareSync(currentPassword, foundUser.password);
+    if (!isValid) {
+      throw new BadRequestException("Mật khẩu hiện tại không chính xác");
+    }
+
+    const hashPassword = await hashPasswordHelper(newPassword);
+    await this.userModel.updateOne({ _id: user._id }, { password: hashPassword });
+
+    return { status: "success", message: "Đổi mật khẩu thành công" };
+  }
+
+  async updateProfile(data: UpdateProfileDto, user: any) {
+    return await this.userModel.updateOne({ _id: user._id }, { ...data });
+  }
+
+  async findProfile(user: any) {
+    const result = await this.userModel.findOne({ _id: user._id }).select('-password -codeId -codeExpired');
+    return result;
   }
 
 }
