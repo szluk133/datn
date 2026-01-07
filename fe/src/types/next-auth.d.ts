@@ -135,6 +135,7 @@ export interface IAdminArticle {
     ai_sentiment_label?: string;
     site_categories: string[];
     status: 'visible' | 'hidden' | 'spam';
+    ai_summary?: string[];
 }
 
 export interface ITopic {

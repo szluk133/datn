@@ -18,11 +18,9 @@ const ArticleSearchPage = async ({
     const website = params.website ? String(params.website) : "";
     const topic = params.topic ? String(params.topic) : "";
     const sort = params.sort ? String(params.sort) : "";
-
     const startDate = params.startDate ? String(params.startDate) : "";
     const endDate = params.endDate ? String(params.endDate) : "";
     
-    // Cập nhật: Thêm sentimentLabel và giữ min/max sentiment cho độ tin cậy
     const sentimentLabel = params.sentimentLabel ? String(params.sentimentLabel) : "";
     const minSentiment = params.minSentiment ? String(params.minSentiment) : "";
     const maxSentiment = params.maxSentiment ? String(params.maxSentiment) : "";
@@ -42,11 +40,9 @@ const ArticleSearchPage = async ({
     if (website) apiParams.append('website', website);
     if (topic) apiParams.append('topic', topic);
     if (sort) apiParams.append('sort', sort);
-
     if (startDate) apiParams.append('startDate', startDate);
     if (endDate) apiParams.append('endDate', endDate);
     
-    // Thêm tham số mới vào API call
     if (sentimentLabel) apiParams.append('sentimentLabel', sentimentLabel);
     if (minSentiment) apiParams.append('minSentiment', minSentiment);
     if (maxSentiment) apiParams.append('maxSentiment', maxSentiment);
@@ -67,9 +63,6 @@ const ArticleSearchPage = async ({
         } else if (Array.isArray(resArticles.data)) {
             articles = resArticles.data;
             total = articles.length;
-        } else if ((resArticles.data as any).hits) {
-            articles = (resArticles.data as any).hits;
-            total = (resArticles.data as any).estimatedTotalHits || (resArticles.data as any).totalHits || 0;
         }
     }
 
@@ -79,7 +72,7 @@ const ArticleSearchPage = async ({
             minHeight: '100vh', 
             padding: '24px' 
         }}>
-            <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+            <div style={{ maxWidth: 1300, margin: '0 auto' }}>
                 <SearchClient 
                     articles={articles}
                     meta={{ current, pageSize, total }}

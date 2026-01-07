@@ -84,6 +84,7 @@ export class AdminController {
   async getMeiliStats() { return this.adminService.getMeiliStats(); }
 
   @Post('system/meilisearch/sync')
+  @Public()
   @Roles(Role.Admin)
   async syncData() { return this.adminService.syncToMeiliSearch(); }
   

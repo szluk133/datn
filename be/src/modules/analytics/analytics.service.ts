@@ -114,7 +114,8 @@ export class AnalyticsService {
         ]);
 
         return trend.map(t => ({
-            date: `${t._id.day}/${t._id.month}/${t._id.year}`,
+            // FIX: Chuyển về định dạng ISO YYYY-MM-DD để frontend parse chính xác
+            date: `${t._id.year}-${String(t._id.month).padStart(2, '0')}-${String(t._id.day).padStart(2, '0')}`,
             avgConfidence: parseFloat((t.avgConfidence || 0).toFixed(2)),
             totalArticles: t.totalArticles,
             breakdown: {

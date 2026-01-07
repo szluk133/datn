@@ -19,7 +19,7 @@ from models import ChatRequest, ChatResponse, ChatHistory, SourcedAnswer, ChatCo
 
 logger = logging.getLogger(__name__)
 
-# --- SYSTEM PROMPT ROUTER ---
+# --- SYSTEM PROMPT ROUTER --
 SYSTEM_PROMPT_ROUTER = """
 Bạn là AI Query Router. Nhiệm vụ: Phân tích ngữ cảnh và câu hỏi để định tuyến.
 
@@ -75,8 +75,11 @@ OUTPUT JSON:
 """
 
 SYSTEM_PROMPT_CHAT = (
-    "Bạn là trợ lý AI thông minh. Trả lời dựa trên thông tin cung cấp.\n"
+    "Bạn là một trợ lý AI thông minh, luôn trả lời một cách tự nhiên và hữu ích như trong cuộc trò chuyện hàng ngày. "
+    "Ưu tiên sử dụng thông tin từ dữ liệu được cung cấp để trả lời trực tiếp câu hỏi của người dùng. "
+    "Nếu câu hỏi không liên quan đến dữ liệu, hãy trả lời ngắn gọn và tự nhiên, sau đó gợi ý mượt mà các bài báo liên quan từ dữ liệu để hỗ trợ thêm, kèm trích dẫn nguồn."
     "LƯU Ý QUAN TRỌNG:\n"
+    "Trả lời theo phong cách thân thiện, dễ hiểu, không dùng các từ \"dựa trên thông tin được cung cấp\", \"dựa trên lịch sử\", ....\n"
     "- Nếu câu hỏi là câu phụ (Sub-question) hoặc tham chiếu số thứ tự (ví dụ: 'bài 1', 'tin đầu tiên', 'phần 1'), hãy CĂN CỨ VÀO LỊCH SỬ CHAT (câu trả lời trước của Bot) để xác định chính xác bài báo đang được nhắc đến.\n"
     "- Luôn trích dẫn nguồn (Source) cho mọi thông tin đưa ra, mỗi bài báo chỉ trích dẫn nguồn 1 lần duy nhất."
 )
@@ -96,7 +99,7 @@ class ChatService:
             
             self.qdrant_client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
             self.qdrant_collection_name = settings.qdrant_collection_name
-            logger.info(f"ChatService V18.1 Ready (Updated: Added Fallback Layer 4 - Filter Relaxation).")
+            logger.info(f"ChatService V18.3 Ready (Updated: Contextual Summary Layout).")
         except Exception as e:
             logger.error(f"Init Error: {e}")
             raise
@@ -237,7 +240,6 @@ class ChatService:
         if not sources:
             return None
 
-        # 1. Check Ordinal 
         match = re.search(r'(?:bài|tin|phần|số|mục)\s+(?:thứ\s+)?(\d+)', query.lower())
         if match:
             try:
@@ -249,12 +251,10 @@ class ChatService:
             except:
                 pass
         
-        # Check text ordinal
         lower_q = query.lower()
         if "đầu tiên" in lower_q or "thứ nhất" in lower_q: return sources[0].article_id, sources[0].title
         if ("thứ hai" in lower_q or "thứ 2" in lower_q) and len(sources) > 1: return sources[1].article_id, sources[1].title
         
-        # 2. Check Semantic Keyword Matching
         best_match = None
         max_score = 0
         query_tokens = set(lower_q.split())
@@ -305,8 +305,6 @@ class ChatService:
         target_article_id = None
         target_article_title = None
 
-        # [FIX 1] Logic Smart Reference chỉ chạy khi không phải yêu cầu số lượng nhiều
-        # Nếu user hỏi "3 bài", ta cần list, không phải 1 bài cụ thể.
         is_plural_request = requested_quantity and requested_quantity > 1
 
         if dependency == "sub" and not is_plural_request:
@@ -341,7 +339,6 @@ class ChatService:
 
         top_sorted_ids = []
 
-        # --- LOGIC CHIẾN LƯỢC TÌM KIẾM ---
         if target_article_id:
             base_filters = {"article_id": target_article_id}
             base_filters["type"] = "chunk" 
@@ -388,7 +385,7 @@ class ChatService:
                 should_fallback_to_global = True 
         
         elif request.context.current_page == "my_page":
-            base_filters["type"] = "my-page"
+            base_filters["type"] = "my_page"
             strategy = "My Page Search"
             if request.context.update_id:
                 base_filters["update_id"] = request.context.update_id
@@ -404,12 +401,9 @@ class ChatService:
             if request.context.current_page != "my_page":
                 base_filters["type"] = "chunk"
 
-        # --- THỰC HIỆN TÌM KIẾM ---
-        # Tầng 1: Initial Search
         final_filter = self._build_qdrant_filters(base_filters, {"filters": extracted_filters})
         results = await self._search_qdrant(search_query, final_filter, limit=limit)
 
-        # Tầng 2: Fallback 0 (Global Search)
         if not results and should_fallback_to_global:
             logger.info("⚠️ Scoped Search empty. Fallback to Global Search...")
             if "search_id" in base_filters: del base_filters["search_id"]
@@ -419,21 +413,18 @@ class ChatService:
             results = await self._search_qdrant(search_query, final_filter, limit=limit)
             if results: strategy = "Global Search (Fallback from Scoped)"
 
-        # Tầng 3: Fallback A (Type Relaxation)
         if not results and base_filters.get("type") == "ai_summary":
             logger.info("⚠️ No pre-computed summaries found. Fallback to full text search...")
             if "type" in base_filters: 
                 del base_filters["type"]
-                if request.context.current_page == "my_page": base_filters["type"] = "my-page"
+                if request.context.current_page == "my_page": base_filters["type"] = "my_page"
             
             final_filter = self._build_qdrant_filters(base_filters, {"filters": extracted_filters})
             results = await self._search_qdrant(search_query, final_filter, limit=limit)
 
-        # [NEW LOGIC] Tầng 4: Fallback B (Filter Relaxation)
         if not results and has_content_filters and not target_article_id:
             logger.info("⚠️ All strict filters failed. Executing Fallback B: Filter Relaxation (Semantic Only)...")
             
-            # 1. Giữ lại các bộ lọc bắt buộc (System filters)
             relaxed_filters = {}
             if "search_id" in base_filters:
                 relaxed_filters["search_id"] = base_filters["search_id"]
@@ -442,19 +433,16 @@ class ChatService:
             if "type" in base_filters:
                 relaxed_filters["type"] = base_filters["type"]
 
-            # 2. Loại bỏ các bộ lọc nội dung từ người dùng (chỉ giữ quantity nếu cần)
             relaxed_ai_filters = {} 
             if "quantity" in extracted_filters:
                 relaxed_ai_filters["quantity"] = extracted_filters["quantity"]
 
-            # 3. Thực hiện tìm kiếm lại
             final_filter_relaxed = self._build_qdrant_filters(relaxed_filters, {"filters": relaxed_ai_filters})
             results = await self._search_qdrant(search_query, final_filter_relaxed, limit=limit)
             
             if results:
                 strategy = "Semantic Fallback (Filters Relaxed)"
 
-        # --- RE-SORT RESULTS ---
         if results:
             def get_id(point):
                 return point.payload.get("article_id") or point.payload.get("metadata", {}).get("article_id")
@@ -487,7 +475,12 @@ class ChatService:
                 aid = payload.get("article_id") or payload.get("metadata", {}).get("article_id", "unknown")
                 
                 publish_date = payload.get("publish_date", "N/A")
-                site_categories = payload.get("site_categories", payload.get("topic", "N/A"))
+                
+                topic = payload.get("topic", [])
+                if not topic:
+                    topic = payload.get("site_categories", "N/A")
+                
+                website = payload.get("website", "N/A")
                 
                 sentiment_label = payload.get("ai_sentiment_label", "N/A")
                 sentiment_confidence = payload.get("ai_sentiment_score", "N/A")
@@ -498,9 +491,11 @@ class ChatService:
                 
                 context_parts.append(
                     f"--- Bài: {title} ---\n"
+                    f"Website: {website}\n"
                     f"Ngày đăng: {publish_date}\n"
-                    f"Cảm xúc AI: {sentiment_label} (Độ tin cậy: {sentiment_confidence})\n"
-                    f"Chủ đề: {site_categories}\n"
+                    f"Chủ đề: {topic}\n"
+                    f"Cảm xúc (Label): {sentiment_label}\n"
+                    f"Cảm xúc (Score): {sentiment_confidence}\n"
                     f"Nội dung:\n{content}"
                 )
                 
@@ -513,9 +508,16 @@ class ChatService:
                 for h in reversed(history[:2])
             ])
 
-            # [FIX 2] Prompt Engineering: Inject Dependency & Force Data Priority
             prompt_instruction = ""
-            if dependency == "main":
+            
+            if intent == "contextual_summary":
+                prompt_instruction = (
+                    "YÊU CẦU VỀ CẤU TRÚC CÂU TRẢ LỜI (BẮT BUỘC):\n"
+                    "1. TỔNG HỢP CHUNG: Trước tiên, hãy viết một đoạn văn tổng hợp, đúc kết các thông tin quan trọng nhất và xu hướng chung từ TẤT CẢ các bài báo tìm được.\n"
+                    "2. TÓM TẮT TỪNG BÀI: Tiếp theo, hãy đi vào chi tiết tóm tắt nội dung chính của từng bài báo một cách ngắn gọn.\n"
+                    "Hãy trích dẫn nguồn đầy đủ."
+                )
+            elif dependency == "main":
                 prompt_instruction = (
                     "CHÚ Ý: Đây là câu hỏi chính (Main Question). "
                     "Hãy ưu tiên sử dụng dữ liệu trong phần 'Dữ liệu tìm được' bên dưới để trả lời. "
@@ -567,7 +569,7 @@ class ChatService:
 
 # logger = logging.getLogger(__name__)
 
-# # --- SYSTEM PROMPT ROUTER ---
+# # --- SYSTEM PROMPT ROUTER --
 # SYSTEM_PROMPT_ROUTER = """
 # Bạn là AI Query Router. Nhiệm vụ: Phân tích ngữ cảnh và câu hỏi để định tuyến.
 
@@ -623,8 +625,11 @@ class ChatService:
 # """
 
 # SYSTEM_PROMPT_CHAT = (
-#     "Bạn là trợ lý AI thông minh. Trả lời dựa trên thông tin cung cấp.\n"
+#     "Bạn là một trợ lý AI thông minh, luôn trả lời một cách tự nhiên và hữu ích như trong cuộc trò chuyện hàng ngày. "
+#     "Ưu tiên sử dụng thông tin từ dữ liệu được cung cấp để trả lời trực tiếp câu hỏi của người dùng. "
+#     "Nếu câu hỏi không liên quan đến dữ liệu, hãy trả lời ngắn gọn và tự nhiên, sau đó gợi ý mượt mà các bài báo liên quan từ dữ liệu để hỗ trợ thêm, kèm trích dẫn nguồn."
 #     "LƯU Ý QUAN TRỌNG:\n"
+#     "Trả lời theo phong cách thân thiện, dễ hiểu, không dùng các từ \"dựa trên thông tin được cung cấp\", \"dựa trên lịch sử\", ....\n"
 #     "- Nếu câu hỏi là câu phụ (Sub-question) hoặc tham chiếu số thứ tự (ví dụ: 'bài 1', 'tin đầu tiên', 'phần 1'), hãy CĂN CỨ VÀO LỊCH SỬ CHAT (câu trả lời trước của Bot) để xác định chính xác bài báo đang được nhắc đến.\n"
 #     "- Luôn trích dẫn nguồn (Source) cho mọi thông tin đưa ra, mỗi bài báo chỉ trích dẫn nguồn 1 lần duy nhất."
 # )
@@ -644,7 +649,7 @@ class ChatService:
             
 #             self.qdrant_client = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
 #             self.qdrant_collection_name = settings.qdrant_collection_name
-#             logger.info(f"ChatService V18.0 Ready (Updated: Fix Quantity Logic & Prompt Injection).")
+#             logger.info(f"ChatService V18.1 Ready (Updated: Added Fallback Layer 4 - Filter Relaxation).")
 #         except Exception as e:
 #             logger.error(f"Init Error: {e}")
 #             raise
@@ -894,6 +899,7 @@ class ChatService:
 #             base_filters = {"article_id": target_article_id}
 #             base_filters["type"] = "chunk" 
 #             strategy = f"Smart Reference (Target: {target_article_title})"
+            
 #             if "topic" in extracted_filters: 
 #                 del extracted_filters["topic"]
 #             if "website" in extracted_filters: del extracted_filters["website"]
@@ -935,7 +941,7 @@ class ChatService:
 #                 should_fallback_to_global = True 
         
 #         elif request.context.current_page == "my_page":
-#             base_filters["type"] = "my-page"
+#             base_filters["type"] = "my_page"
 #             strategy = "My Page Search"
 #             if request.context.update_id:
 #                 base_filters["update_id"] = request.context.update_id
@@ -952,9 +958,11 @@ class ChatService:
 #                 base_filters["type"] = "chunk"
 
 #         # --- THỰC HIỆN TÌM KIẾM ---
+#         # Tầng 1: Initial Search
 #         final_filter = self._build_qdrant_filters(base_filters, {"filters": extracted_filters})
 #         results = await self._search_qdrant(search_query, final_filter, limit=limit)
 
+#         # Tầng 2: Fallback 0 (Global Search)
 #         if not results and should_fallback_to_global:
 #             logger.info("⚠️ Scoped Search empty. Fallback to Global Search...")
 #             if "search_id" in base_filters: del base_filters["search_id"]
@@ -964,14 +972,40 @@ class ChatService:
 #             results = await self._search_qdrant(search_query, final_filter, limit=limit)
 #             if results: strategy = "Global Search (Fallback from Scoped)"
 
+#         # Tầng 3: Fallback A (Type Relaxation)
 #         if not results and base_filters.get("type") == "ai_summary":
 #             logger.info("⚠️ No pre-computed summaries found. Fallback to full text search...")
 #             if "type" in base_filters: 
 #                 del base_filters["type"]
-#                 if request.context.current_page == "my_page": base_filters["type"] = "my-page"
+#                 if request.context.current_page == "my_page": base_filters["type"] = "my_page"
             
 #             final_filter = self._build_qdrant_filters(base_filters, {"filters": extracted_filters})
 #             results = await self._search_qdrant(search_query, final_filter, limit=limit)
+
+#         # [NEW LOGIC] Tầng 4: Fallback B (Filter Relaxation)
+#         if not results and has_content_filters and not target_article_id:
+#             logger.info("⚠️ All strict filters failed. Executing Fallback B: Filter Relaxation (Semantic Only)...")
+            
+#             # 1. Giữ lại các bộ lọc bắt buộc (System filters)
+#             relaxed_filters = {}
+#             if "search_id" in base_filters:
+#                 relaxed_filters["search_id"] = base_filters["search_id"]
+#             if "update_id" in base_filters:
+#                 relaxed_filters["update_id"] = base_filters["update_id"]
+#             if "type" in base_filters:
+#                 relaxed_filters["type"] = base_filters["type"]
+
+#             # 2. Loại bỏ các bộ lọc nội dung từ người dùng (chỉ giữ quantity nếu cần)
+#             relaxed_ai_filters = {} 
+#             if "quantity" in extracted_filters:
+#                 relaxed_ai_filters["quantity"] = extracted_filters["quantity"]
+
+#             # 3. Thực hiện tìm kiếm lại
+#             final_filter_relaxed = self._build_qdrant_filters(relaxed_filters, {"filters": relaxed_ai_filters})
+#             results = await self._search_qdrant(search_query, final_filter_relaxed, limit=limit)
+            
+#             if results:
+#                 strategy = "Semantic Fallback (Filters Relaxed)"
 
 #         # --- RE-SORT RESULTS ---
 #         if results:

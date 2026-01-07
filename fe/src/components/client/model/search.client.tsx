@@ -1,8 +1,14 @@
 'use client'
 
 import React, { useEffect, useState } from 'react';
-import { Table, Tag, Button, Input, Select, Card, DatePicker, Row, Col, Slider, Typography, theme, Empty, Tooltip, Space, Flex } from 'antd';
-import { SearchOutlined, FilterOutlined, ReloadOutlined, SmileFilled, FrownFilled, MehFilled, InfoCircleOutlined } from '@ant-design/icons';
+import { 
+    Table, Tag, Button, Input, Select, Card, DatePicker, Row, Col, 
+    Slider, Typography, theme, Empty, Tooltip, Space, Flex 
+} from 'antd';
+import { 
+    SearchOutlined, FilterOutlined, ReloadOutlined, 
+    SmileFilled, FrownFilled, MehFilled, InfoCircleOutlined 
+} from '@ant-design/icons';
 import { useSession } from 'next-auth/react';
 import { sendRequest } from '@/utils/api';
 import { IAdminArticle, ITopic } from '@/types/next-auth';
@@ -33,7 +39,6 @@ interface IProps {
     };
 }
 
-// Hàm highlight text giữ nguyên
 const convertByteIndexToCharIndex = (str: string, byteStart: number, byteLength: number) => {
     let currentByteCount = 0;
     let charStart = -1;
@@ -101,14 +106,11 @@ const SearchClient = (props: IProps) => {
         return [start ? dayjs(start) : null, end ? dayjs(end) : null];
     });
 
-    // State mới cho Label
     const [sentimentLabel, setSentimentLabel] = useState<string | undefined>(searchParams.get('sentimentLabel') || undefined);
 
-    // State cho Confidence (Độ tin cậy): 0 -> 1
     const [confidenceRange, setConfidenceRange] = useState<[number, number]>(() => {
         const min = searchParams.get('minSentiment');
         const max = searchParams.get('maxSentiment');
-        // Mặc định là 0 - 1 (Toàn bộ dải độ tin cậy)
         return [min ? parseFloat(min) : 0, max ? parseFloat(max) : 1];
     });
 
@@ -164,10 +166,12 @@ const SearchClient = (props: IProps) => {
             params.set('page', pagination.current.toString());
             params.set('limit', (pagination.pageSize || 10).toString());
         }
+        
         const sortResult = sorter as SorterResult<IAdminArticle>;
-        if (sortResult && sortResult.order) {
+        if (sortResult && sortResult.order && sortResult.columnKey) {
+            const field = sortResult.columnKey === 'sentiment' ? 'ai_sentiment_score' : sortResult.field;
             const sortOrder = sortResult.order === 'ascend' ? 'asc' : 'desc';
-            params.set('sort', `${sortResult.field}:${sortOrder}`);
+            params.set('sort', `${field}:${sortOrder}`);
         } else {
             params.delete('sort');
         }
@@ -189,10 +193,8 @@ const SearchClient = (props: IProps) => {
             params.delete('endDate');
         }
 
-        // Handle Label
         if (sentimentLabel) params.set('sentimentLabel', sentimentLabel); else params.delete('sentimentLabel');
 
-        // Handle Confidence (chỉ set khi khác mặc định 0-1)
         if (confidenceRange[0] !== 0 || confidenceRange[1] !== 1) {
             params.set('minSentiment', confidenceRange[0].toString());
             params.set('maxSentiment', confidenceRange[1].toString());
@@ -236,11 +238,11 @@ const SearchClient = (props: IProps) => {
                 const articleId = record.article_id || record.id || record._id;
                 return (
                     <div style={{ wordWrap: 'break-word', wordBreak: 'break-word' }}>
-                        <Link href={`/model/article/${articleId}`} style={{ fontWeight: 500, display: 'block', marginBottom: 4, color: token.colorPrimary }}>
+                        <Link href={`/model/article/${articleId}`} style={{ fontWeight: 600, fontSize: 15, display: 'block', marginBottom: 4, color: token.colorPrimary }}>
                             <HighlightText text={text} matches={matchesPosition?.title} />
                         </Link>
                         {matchesPosition?.summary && (
-                            <div style={{ fontSize: '12px', color: '#666', background: '#f9f9f9', padding: '4px 8px', borderRadius: 4, marginBottom: 4, fontStyle: 'italic' }}>
+                            <div style={{ fontSize: '13px', color: '#666', background: '#f9f9f9', padding: '6px 8px', borderRadius: 6, marginBottom: 4 }}>
                                 <span style={{ fontWeight: 600 }}>Trong tóm tắt: </span>
                                 <HighlightText 
                                     text={record.summary?.length > 150 ? record.summary.substring(0, 150) + "..." : record.summary} 
@@ -249,12 +251,12 @@ const SearchClient = (props: IProps) => {
                             </div>
                         )}
                         {!matchesPosition?.summary && record.summary && (
-                            <div style={{ fontSize: '12px', color: '#666' }}>
+                            <div style={{ fontSize: '13px', color: '#666' }}>
                                 {record.summary.substring(0, 150)}...
                             </div>
                         )}
                         {matchesPosition?.ai_summary && !matchesPosition?.summary && (
-                            <div style={{ fontSize: '12px', color: '#666', background: '#f9f9f9', padding: '4px 8px', borderRadius: 4, marginBottom: 4, fontStyle: 'italic' }}>
+                            <div style={{ fontSize: '13px', color: '#666', background: '#f9f9f9', padding: '6px 8px', borderRadius: 6, marginBottom: 4 }}>
                                 <span style={{ fontWeight: 600 }}>Trong AI tóm tắt: </span>
                                 <HighlightText 
                                     text={record.ai_summary?.length > 150 ? record.ai_summary.substring(0, 150) + "..." : record.ai_summary} 
@@ -290,7 +292,6 @@ const SearchClient = (props: IProps) => {
             sorter: true,
             sortOrder: sentimentSortOrder, 
             render: (_: any, record: any) => {
-                // Logic hiển thị mới: Dùng Label làm chính, Score làm độ tin cậy
                 const label = record.ai_sentiment_label || 'Unknown';
                 const score = record.ai_sentiment_score ?? 0;
                 
@@ -298,7 +299,6 @@ const SearchClient = (props: IProps) => {
                 let icon = <MehFilled />;
                 let labelVi = 'Chưa phân tích';
                 
-                // Chuẩn hóa label về chữ thường để so sánh
                 const lowerLabel = label.toLowerCase();
 
                 if (['positive', 'tích cực'].includes(lowerLabel)) {
@@ -321,13 +321,13 @@ const SearchClient = (props: IProps) => {
 
                 return (
                     <Flex vertical gap={4} align="start">
-                        <Tag color={color} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <Tag color={color} style={{ margin: 0, display: 'flex', alignItems: 'center', gap: 6, padding: '2px 8px' }}>
                             {icon} {labelVi}
                         </Tag>
                         <Tooltip title="Độ tin cậy của AI">
                             <Space size={4} style={{ fontSize: 12, color: token.colorTextSecondary }}>
                                 <InfoCircleOutlined /> 
-                                {(score * 100).toFixed(0)}%
+                                Độ tin cậy: <strong>{(score * 100).toFixed(0)}%</strong>
                             </Space>
                         </Tooltip>
                     </Flex>
@@ -351,7 +351,6 @@ const SearchClient = (props: IProps) => {
                             siteCategories={record.site_categories}
                             summary={record.summary}
                             aiSentimentScore={record.ai_sentiment_score}
-                            aiSentimentLabel={record.ai_sentiment_label} // Truyền thêm label
                             publishDate={record.publish_date}
                             size="middle"
                             type="text"
@@ -364,9 +363,9 @@ const SearchClient = (props: IProps) => {
 
     return (
         <Card 
-            title={<Title level={4} style={{ margin: 0 }}>Tìm kiếm bài báo</Title>}
+            title={<Title level={4} style={{ margin: 0 }}>Tìm kiếm bài báo có sẵn</Title>}
             variant="borderless"
-            style={{ borderRadius: token.borderRadiusLG, boxShadow: token.boxShadowTertiary }}
+            style={{ borderRadius: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.05)' }}
         >
             <div style={{ marginBottom: 20 }}>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10, alignItems: 'center' }}>
@@ -422,13 +421,14 @@ const SearchClient = (props: IProps) => {
 
                 {isAdvancedVisible && (
                     <div style={{ 
-                        background: '#f9f9f9', 
-                        padding: '16px 20px', 
-                        borderRadius: 8, 
-                        marginTop: 12,
+                        background: '#f8f9fa', 
+                        padding: '20px 24px', 
+                        borderRadius: 12, 
+                        marginTop: 16,
                         border: '1px solid #f0f0f0'
                     }}>
-                        <Row gutter={[24, 16]} align="middle">
+                        <Row gutter={[32, 16]} align="middle">
+                            {/* Date Filter */}
                             <Col xs={24} md={12} lg={8}>
                                 <Text strong style={{ display: 'block', marginBottom: 8 }}>Khoảng thời gian:</Text>
                                 <RangePicker 
@@ -439,9 +439,11 @@ const SearchClient = (props: IProps) => {
                                     placeholder={['Từ ngày', 'Đến ngày']}
                                 />
                             </Col>
+
+                            {/* AI Sentiment Filter */}
                             <Col xs={24} md={12} lg={10}>
                                 <Text strong style={{ display: 'block', marginBottom: 8 }}>Bộ lọc cảm xúc AI:</Text>
-                                <Row gutter={12}>
+                                <Row gutter={16}>
                                     <Col span={10}>
                                         <Select
                                             placeholder="Chọn nhãn"
@@ -450,15 +452,15 @@ const SearchClient = (props: IProps) => {
                                             value={sentimentLabel}
                                             onChange={setSentimentLabel}
                                             options={[
-                                                { value: 'Positive', label: <Space><SmileFilled style={{ color: '#52c41a' }} /> Tích cực</Space> },
-                                                { value: 'Negative', label: <Space><FrownFilled style={{ color: '#ff4d4f' }} /> Tiêu cực</Space> },
-                                                { value: 'Neutral', label: <Space><MehFilled style={{ color: '#faad14' }} /> Trung tính</Space> },
+                                                { value: 'Tích cực', label: <Space><SmileFilled style={{ color: '#52c41a' }} /> Tích cực</Space> },
+                                                { value: 'Tiêu cực', label: <Space><FrownFilled style={{ color: '#ff4d4f' }} /> Tiêu cực</Space> },
+                                                { value: 'Trung tính', label: <Space><MehFilled style={{ color: '#faad14' }} /> Trung tính</Space> },
                                             ]}
                                         />
                                     </Col>
                                     <Col span={14}>
                                         <div style={{ display: 'flex', alignItems: 'center' }}>
-                                            <span style={{ fontSize: 12, color: '#888', marginRight: 8, whiteSpace: 'nowrap' }}>Độ tin cậy:</span>
+                                            <span style={{ fontSize: 12, color: '#888', marginRight: 12, whiteSpace: 'nowrap' }}>Độ tin cậy:</span>
                                             <Slider
                                                 range
                                                 min={0}
@@ -473,6 +475,8 @@ const SearchClient = (props: IProps) => {
                                     </Col>
                                 </Row>
                             </Col>
+
+                            {/* Sort */}
                             <Col xs={24} md={12} lg={6}>
                                 <Text strong style={{ display: 'block', marginBottom: 8 }}>Sắp xếp:</Text>
                                 <Select 
@@ -507,7 +511,7 @@ const SearchClient = (props: IProps) => {
                     showTotal: (total) => `Tổng ${total} bài viết`
                 }}
                 scroll={{ x: 1000 }}
-                size="small"
+                size="middle"
                 locale={{ emptyText: <Empty description="Không tìm thấy bài báo nào" /> }}
                 rowClassName="article-row"
             />

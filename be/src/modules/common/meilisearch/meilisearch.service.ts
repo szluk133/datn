@@ -1,5 +1,5 @@
 import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { MeiliSearch, Index } from 'meilisearch';
+import { MeiliSearch, Index, Settings } from 'meilisearch';
 
 @Injectable()
 export class MeiliSearchService implements OnModuleInit {
@@ -9,40 +9,55 @@ export class MeiliSearchService implements OnModuleInit {
 
     constructor() {
         this.client = new MeiliSearch({
-            host: process.env.MEILISEARCH_URL,
+            host: process.env.MEILISEARCH_URL || 'http://localhost:7700',
             apiKey: process.env.MEILISEARCH_KEY,
         });
     }
 
     async onModuleInit() {
         this.index = this.client.index('articles');
+        // Gọi update mặc định khi khởi tạo module
         await this.updateIndexSettings();
     }
 
-    async updateIndexSettings() {
+    // [NEW] Lấy settings hiện tại của Index
+    async getIndexSettings(): Promise<Settings> {
+        return await this.index.getSettings();
+    }
+
+    // [UPDATED] Cho phép nhận settings tùy chỉnh
+    async updateIndexSettings(settings?: Settings) {
         this.logger.log('Updating MeiliSearch Index Settings...');
         try {
-            await this.index.updateFilterableAttributes([
-                'article_id',
-                'website',
-                'site_categories',
-                'publish_date',
-                'ai_sentiment_score',
-                'status', 
-                'search_id'
-            ]);
+            if (settings) {
+                // Nếu có settings truyền vào (từ AdminService), dùng nó
+                await this.index.updateSettings(settings);
+            } else {
+                // Default settings (dùng khi khởi tạo app)
+                await this.index.updateFilterableAttributes([
+                    'article_id',
+                    'website',
+                    'site_categories',
+                    'publish_date',
+                    'ai_sentiment_score',
+                    'ai_sentiment_label', // Đảm bảo có label
+                    'status', 
+                    'search_id'
+                ]);
 
-            await this.index.updateSortableAttributes([
-                'publish_date', 
-                'ai_sentiment_score'
-            ]);
+                await this.index.updateSortableAttributes([
+                    'publish_date', 
+                    'ai_sentiment_score'
+                ]);
 
-            await this.index.updateSearchableAttributes([
-                'title',
-                'summary',
-                'content',
-                'ai_summary'
-            ]);
+                await this.index.updateSearchableAttributes([
+                    'title',
+                    'summary',
+                    'content',
+                    'ai_summary',
+                    'ai_sentiment_label'
+                ]);
+            }
 
             this.logger.log('MeiliSearch attributes updated successfully.');
             return { status: 'success', message: 'MeiliSearch Settings Updated' };
@@ -96,6 +111,7 @@ export class MeiliSearchService implements OnModuleInit {
                 'website', 
                 'publish_date', 
                 'ai_sentiment_score', 
+                'ai_sentiment_label',
                 'site_categories',
                 'status'
             ]

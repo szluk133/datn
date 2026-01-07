@@ -71,9 +71,9 @@ export class AdminService {
                 undefined: { 
                     $sum: { 
                         $cond: [
-                            { $and: [ { $ne: ['$ai_sentiment_label', null] }, { $ne: ['$ai_sentiment_label', ''] } ] },
-                            0,
-                            1
+                            { $or: [ { $eq: ['$ai_sentiment_label', null] }, { $eq: ['$ai_sentiment_label', ''] } ] },
+                            1,
+                            0
                         ] 
                     } 
                 }
@@ -85,7 +85,8 @@ export class AdminService {
       totalArticles,
       topSources,
       sentiment: sentimentStats[0] || { avgConfidence: 0, positive: 0, negative: 0, neutral: 0, undefined: 0 },
-      crawledToday: await this.countCrawledToday()
+      crawledToday: await this.countCrawledToday(),
+      searchesToday: await this.countSearchesToday()
     };
   }
 
@@ -96,7 +97,13 @@ export class AdminService {
   private async countCrawledToday() {
     const startOfDay = new Date();
     startOfDay.setHours(0,0,0,0);
-    return this.articleModel.countDocuments({ createdAt: { $gte: startOfDay } });
+    return this.articleModel.countDocuments({ crawled_at: { $gte: startOfDay } });
+  }
+
+  private async countSearchesToday() {
+    const startOfDay = new Date();
+    startOfDay.setHours(0,0,0,0);
+    return this.historyModel.countDocuments({ timestamp: { $gte: startOfDay } });
   }
 
   async updateCrawlSchedule(minutes: number) {
@@ -157,6 +164,7 @@ export class AdminService {
     if (dto.status) filterArray.push(`status = "${dto.status}"`);
     if (dto.topic) filterArray.push(`site_categories = "${dto.topic}"`);
     
+    // Filter theo Label
     if (dto.sentimentLabel) filterArray.push(`ai_sentiment_label = "${dto.sentimentLabel}"`);
 
     if (dto.startDate) {
@@ -168,6 +176,7 @@ export class AdminService {
         filterArray.push(`publish_date <= ${endTs}`);
     }
 
+    // Filter theo Confidence Score (0-1)
     if (dto.minSentiment !== undefined) filterArray.push(`ai_sentiment_score >= ${dto.minSentiment}`);
     if (dto.maxSentiment !== undefined) filterArray.push(`ai_sentiment_score <= ${dto.maxSentiment}`);
 
@@ -180,7 +189,6 @@ export class AdminService {
     const query = dto.q || '';
 
     try {
-
       const result = await this.meiliService.search(query, {
         limit, 
         offset, 
@@ -189,7 +197,7 @@ export class AdminService {
         showMatchesPosition: true,
         attributesToRetrieve: [
             'article_id', 'title', 'url', 'site_categories', 
-            'ai_sentiment_score', 'ai_sentiment_label', 
+            'ai_sentiment_score', 'ai_sentiment_label',
             'status', 'publish_date', 'website', 'summary'
         ]
       });
@@ -243,7 +251,6 @@ export class AdminService {
 
         const results = await Promise.allSettled([
             this.meiliService.deleteDocument(articleId),
-            
             this.qdrantService.deleteByFilter(articleId) 
         ]);
 
@@ -270,7 +277,20 @@ export class AdminService {
   async getMeiliStats() { return this.meiliService.getStats(); }
 
   async configureMeiliSearch() {
-      return this.meiliService.updateIndexSettings();
+      // Cập nhật settings để có thể filter theo ai_sentiment_label
+      this.logger.log('Updating MeiliSearch Index Settings (Adding ai_sentiment_label to filterableAttributes)...');
+      
+      const currentSettings = await this.meiliService.getIndexSettings();
+      const currentFilterable = currentSettings.filterableAttributes || [];
+      
+      const newAttributes = ['ai_sentiment_label', 'ai_sentiment_score', 'article_id', 'publish_date', 'search_id', 'site_categories', 'status', 'website'];
+      const uniqueAttributes = Array.from(new Set([...currentFilterable, ...newAttributes]));
+
+      return this.meiliService.updateIndexSettings({
+          filterableAttributes: uniqueAttributes,
+          sortableAttributes: ['publish_date', 'ai_sentiment_score'],
+          searchableAttributes: ['title', 'summary', 'content', 'site_categories', 'website', 'ai_sentiment_label']
+      }); 
   }
 
   async syncToMeiliSearch() {
@@ -304,7 +324,7 @@ export class AdminService {
                 publish_date: publishTimestamp,
                 url: obj.url,
                 ai_sentiment_score: obj.ai_sentiment_score || 0,
-                ai_sentiment_label: (obj as any).ai_sentiment_label || 'Neutral',
+                ai_sentiment_label: obj.ai_sentiment_label || 'Neutral', 
                 site_categories: (obj as any).site_categories,
                 status: (obj as any).status || 'visible'
             });

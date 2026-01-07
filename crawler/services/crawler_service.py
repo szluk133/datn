@@ -46,13 +46,11 @@ async def sync_to_meilisearch(articles: List[Dict]):
         meili_docs = [json_serializable({k:v for k,v in art.items() if k!='_id'}) for art in articles]
         index = meili.index("articles")
         
-        # [UPDATE] Thêm ai_sentiment_label vào thuộc tính lọc
         await index.update_filterable_attributes([
             'publish_date', 'website', 'site_categories', 
             'search_id', 'ai_sentiment_label'
         ])
         
-        # [UPDATE] Thêm ai_sentiment_label vào thuộc tính tìm kiếm (nếu cần tìm text)
         await index.update_searchable_attributes([
             'title', 'summary', 'content', 'site_categories', 
             'website', 'search_keyword', 'ai_sentiment_label'
@@ -65,12 +63,12 @@ async def sync_to_meilisearch(articles: List[Dict]):
 async def crawl_and_process_article(crawler, article_data, content_keyword, website_name, search_keyword, search_id, user_id):
     async with SEMAPHORE:
         try:
-            # [UPDATE LOGIC] Truyền None vào crawl_article_detail để BỎ QUA bộ lọc strict cũ bên trong crawler.
-            # Chúng ta sẽ tự lọc logic "OR" (any) ngay bên dưới sau khi có content.
             detailed = await crawler.crawl_article_detail(article_data, None)
             
             if detailed:
-                # [NEW LOGIC] Lọc nội dung tại đây: Tách dấu phẩy, khớp 1 từ -> lấy
+                if not detailed.get('summary') or len(detailed.get('summary', '').strip()) < 5:
+                    return None
+
                 if content_keyword:
                     keywords = [k.strip().lower() for k in content_keyword.split(',') if k.strip()]
                     if keywords:
@@ -78,9 +76,8 @@ async def crawl_and_process_article(crawler, article_data, content_keyword, webs
                         summary_body = (detailed.get('summary') or "").lower()
                         full_text = content_body + " " + summary_body
                         
-                        # Logic OR (any): Chỉ cần nội dung chứa BẤT KỲ từ khóa nào trong danh sách
                         if not any(k in full_text for k in keywords):
-                            return None # Bỏ qua bài này nếu không khớp từ nào
+                            return None
 
                 extracted_tags = detailed.get('tags', [])
                 site_categories = detailed.get('site_categories', [])
@@ -211,7 +208,6 @@ async def perform_hybrid_search(params, crawlers_map, search_id) -> Tuple[int, s
                     conditions.append(f"({' OR '.join(site_filters)})")
                 filter_query = " AND ".join(conditions)
                 
-                # [FIXED] Removed 'attributesToSearchOn'
                 search_params = { 
                     "filter": filter_query, 
                     "limit": params.max_articles + 100 
@@ -220,7 +216,6 @@ async def perform_hybrid_search(params, crawlers_map, search_id) -> Tuple[int, s
                 res = await meili.index("articles").search(params.keyword_search, **search_params)
                 raw_hits = res.hits
 
-                # [NEW FEATURE] FILTER ONLY TITLE
                 title_filtered_hits = []
                 query_lower = params.keyword_search.lower()
                 
@@ -232,19 +227,17 @@ async def perform_hybrid_search(params, crawlers_map, search_id) -> Tuple[int, s
                 raw_hits = title_filtered_hits
                 
                 if params.keyword_content:
-                    # [IMPROVED LOGIC] Tách dấu phẩy, sử dụng OR (any)
                     keywords = [k.strip().lower() for k in params.keyword_content.split(',') if k.strip()]
                     hits = []
                     
-                    if not keywords: # Nếu chuỗi rỗng sau khi split
-                         hits = raw_hits
+                    if not keywords:
+                        hits = raw_hits
                     else:
                         for h in raw_hits:
                             content_body = (h.get('content') or "").lower()
                             summary_body = (h.get('summary') or "").lower()
                             full_text = content_body + " " + summary_body
                             
-                            # Logic OR (any): Bài viết chứa BẤT KỲ từ nào trong danh sách
                             if any(k in full_text for k in keywords):
                                 hits.append(h)
                 else: hits = raw_hits
@@ -366,7 +359,7 @@ async def search_relevant_articles_for_chat(user_query: str, top_k: int = 3, use
                 "url": p.get("url", ""), 
                 "score": hit.score, 
                 "publish_date": p.get("publish_date", ""),
-                "sentiment_label": p.get("sentiment_label", "Trung tính") # Trả về label cho chat nếu cần
+                "sentiment_label": p.get("sentiment_label", "Trung tính")
             })
         return results
     except Exception as e:
