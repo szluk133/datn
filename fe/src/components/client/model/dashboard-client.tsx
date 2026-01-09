@@ -99,7 +99,7 @@ const DashboardClient = () => {
                                 <Col span={12}>
                                     <Statistic 
                                         title={<span style={{ color: 'rgba(255,255,255,0.7)' }}>Tổng số bài viết trong 2 tháng nay</span>} 
-                                        value={20322} 
+                                        value={19922} 
                                         prefix={<FileTextOutlined />} 
                                         styles={{ content:{ color: '#fff', fontWeight: 'bold' },}} 
                                     />

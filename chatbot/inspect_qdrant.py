@@ -15,7 +15,6 @@ def inspect_data():
     collection_name = settings.qdrant_collection_name
     
     try:
-        # Scroll lấy 5 điểm dữ liệu đầu tiên
         scroll_result, _ = client.scroll(
             collection_name=collection_name,
             limit=5,
@@ -32,13 +31,11 @@ def inspect_data():
             print(f"\nPOINT #{i+1} ID: {point.id}")
             payload = point.payload
             
-            # Kiểm tra các trường quan trọng
             print(f"  - type: {payload.get('type')}")
             print(f"  - topic: {payload.get('topic')}")
             print(f"  - article_id: {payload.get('article_id')}")
             print(f"  - search_id: {payload.get('search_id')}")
             
-            # [NEW] Kiểm tra các trường mới
             print(f"  - update_id (New): {payload.get('update_id')}")
             print(f"  - ai_sentiment_label (New): {payload.get('ai_sentiment_label')}")
             print(f"  - ai_sentiment_score (New): {payload.get('ai_sentiment_score')}")

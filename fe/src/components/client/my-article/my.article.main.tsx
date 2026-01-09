@@ -331,7 +331,6 @@ const MyArticleMain = () => {
                 notification.success({ title: 'Import hoàn tất' });
                 const updateId = data.update_id || data.data?.update_id;
                 if (updateId) {
-                    // Delay 1 chút để người dùng xem kết quả import trước khi chuyển tab
                     setTimeout(() => handleViewBatch(updateId), 3000);
                 }
             } else {
@@ -453,7 +452,7 @@ const MyArticleMain = () => {
                                 icon={<RobotOutlined />} 
                                 loading={loadingEnrich}
                             >
-                                AI Enrich
+                                Phân tích
                             </Button>
                         </Popconfirm>
                     </Tooltip>
@@ -504,7 +503,7 @@ const MyArticleMain = () => {
                         </Row>
                         <Form.Item>
                             <Button type="primary" htmlType="submit" icon={<SaveOutlined />} loading={loading} block style={{ height: 48, fontSize: 16 }}>
-                                Lưu bài viết & Tạo mã lô
+                                Lưu bài viết
                             </Button>
                         </Form.Item>
                     </Form>
@@ -721,7 +720,7 @@ const MyArticleMain = () => {
                                 'Điền Tiêu đề và Nội dung bài viết (Nội dung bắt buộc > 50 ký tự).',
                                 'Chọn nguồn Website và Ngày xuất bản (nếu có).',
                                 'Nhấn "Lưu bài viết". Hệ thống sẽ tự động tạo một Mã lô (Update ID).',
-                                'Sau khi lưu, bạn sẽ được chuyển sang tab Danh sách để xem hoặc chạy AI Enrich.'
+                                'Sau khi lưu, bạn sẽ được chuyển sang tab Danh sách để xem hoặc chạy Phân tích.'
                             ].map((item, index) => (
                                 <div key={index} style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                                     <Badge count={index + 1} style={{ backgroundColor: token.colorPrimary, marginRight: 12 }} />
