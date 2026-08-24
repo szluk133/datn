@@ -2,7 +2,7 @@
 
 🚀 Tính năng chính
 - Crawler Module: Tự động thu thập tin tức từ các nguồn uy tín (CafeF, VnEconomy, VnExpress).
-- Search Engine: Tìm kiếm bài viết nhanh chóng với MeiliSearch.
+- Search Engine: Tìm kiếm bài viết nhanh chóng với MeiliSearch. 
 - AI Chatbot (RAG): Chatbot trả lời câu hỏi sử dụng Qdrant (Vector DB) và LLM.
 - Admin Dashboard: Quản lý bài viết, người dùng, chủ đề và xem thống kê hệ thống.
 - User Interface: Giao diện người dùng thân thiện để đọc tin, lưu bài viết và tương tác với Chatbot.
